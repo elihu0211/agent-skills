@@ -3,12 +3,18 @@
   "cases": [
     {
       "id": "mixed-doc",
-      "query": "這份指南把安裝步驟和「為何選 Postgres」混在一起。該怎麼整理？",
+      "query": "docs/setup.md 把安裝步驟和「為何選 Postgres」混在一起。該怎麼整理？",
       "expected_behavior": [
         "拆成操作指南與說明兩份",
         "兩份之間用連結，不重複內容",
         "兩份都登記在 docs/README.md 並標明類型"
-      ]
+      ],
+      "setup": {
+        "files": {
+          "docs/README.md": "# docs\n",
+          "docs/setup.md": "# 安裝\n\n1. 安裝 Postgres\n2. 建立資料庫\n\n我們選 Postgres 是因為交易一致性與生態系。\n"
+        }
+      }
     },
     {
       "id": "changing-decision",

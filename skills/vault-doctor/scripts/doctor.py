@@ -37,7 +37,8 @@ def run_doctor(vault_dir: Path) -> int:
     vault_dir = vault_dir.resolve()
     print(f"\n🔍 開始診斷技術知識庫：{vault_dir}\n")
 
-    md_files = [p for p in vault_dir.rglob("*.md") if ".git" not in p.parts and ".obsidian" not in p.parts and ".serena" not in p.parts]
+    ignored_dirs = {".git", ".obsidian", ".serena", ".agents", ".claude", "node_modules", "scripts", "evals"}
+    md_files = [p for p in vault_dir.rglob("*.md") if not any(part in ignored_dirs for part in p.parts)]
     total_notes = len(md_files)
     print(f"📄 發現 Markdown 筆記總數：{total_notes}")
 

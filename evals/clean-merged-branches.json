@@ -51,7 +51,7 @@
           "app.py": "def add(a, b):\n    return a + b\n",
           "README.md": "# demo\n"
         },
-        "branches": [
+        "worktrees": [
           "feat/old-a"
         ]
       }
