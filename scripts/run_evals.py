@@ -46,11 +46,15 @@ def run_once(query: str, model: str, setup: dict | None = None) -> set[str]:
         git = ["git", "-C", tmp, "-c", "user.name=eval", "-c", "user.email=eval@example.com"]
         subprocess.run([*git, "add", "-A"], check=True)
         subprocess.run([*git, "commit", "-q", "--allow-empty", "-m", "init"], check=True)
+        for br in setup.get("branches") or []:
+            subprocess.run([*git, "branch", br], check=True)
+        for i, br in enumerate(setup.get("worktrees") or []):
+            subprocess.run([*git, "worktree", "add", "-q", "-b", br, str(Path(tmp) / ".wt" / f"wt{i}")], check=True)
+        if setup.get("checkout"):
+            subprocess.run([*git, "switch", "-q", "-c", setup["checkout"]], check=True)
         for rel, text in (setup.get("dirty") or {}).items():
             (Path(tmp) / rel).parent.mkdir(parents=True, exist_ok=True)
             (Path(tmp) / rel).write_text(text, encoding="utf-8")
-        for br in setup.get("branches") or []:
-            subprocess.run([*git, "branch", br], check=True)
         cmd = [
             "claude", "-p", query,
             "--model", model,

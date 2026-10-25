@@ -35,8 +35,9 @@
           "app.py": "def add(a, b):\n    return a + b\n",
           "README.md": "# demo\n"
         },
+        "checkout": "feat/add-sub",
         "dirty": {
-          "app.py": "def add(a, b):\n    return a + b + 0\n"
+          "app.py": "def add(a, b):\n    return a + b\n\ndef sub(a, b):\n    return a - b\n"
         }
       }
     },
