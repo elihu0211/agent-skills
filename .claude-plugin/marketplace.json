@@ -60,6 +60,15 @@
       "skills": [
         "./skills/clean-merged-branches"
       ]
+    },
+    {
+      "name": "vault-doctor",
+      "description": "Audit and repair Obsidian tech vault structure, broken links, orphans, and templates",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./skills/vault-doctor"
+      ]
     }
   ]
 }

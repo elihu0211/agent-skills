@@ -1,0 +1,32 @@
+{
+  "skill": "vault-doctor",
+  "cases": [
+    {
+      "id": "audit-orphans-and-links",
+      "query": "幫我檢查 Obsidian 知識庫有沒有孤兒筆記或是壞掉的雙向連結。",
+      "expected_behavior": [
+        "掃描全庫 Markdown 筆記並解析所有 [[wikilink]] 參照目標",
+        "列出未被任何 MOC 或章首索引引用的孤兒筆記",
+        "回報無法正確解析到檔案的斷鏈與錯誤路徑"
+      ]
+    },
+    {
+      "id": "template-compliance",
+      "query": "檢查這個知識庫的章節資料夾與章首檔案是否符合統一模板。",
+      "expected_behavior": [
+        "確認每個主題目錄具備庫首頁.md",
+        "驗證是否具備 00 總論/0 章首.md 以及二位數序號章節目錄",
+        "檢查各章節目錄內是否包含 0 章首.md 作為章節導覽"
+      ]
+    },
+    {
+      "id": "frontmatter-audit",
+      "query": "健檢全庫的 Frontmatter，檢查 updated 日期、aliases 與 MOC 標籤設定。",
+      "expected_behavior": [
+        "驗證所有筆記的 YAML frontmatter 是否合規且具備 ISO 日期",
+        "檢查 MOC 筆記是否標記 type: moc 與 tags: [moc]",
+        "確認別名 aliases 是否與全庫其他筆記或首頁撞名"
+      ]
+    }
+  ]
+}
