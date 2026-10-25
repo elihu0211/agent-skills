@@ -148,6 +148,8 @@ def run_doctor(vault_dir: Path) -> int:
     missing_moc_tag = []
     for p, content in file_contents.items():
         rel = p.relative_to(vault_dir)
+        if p.name in ("README.md", "AGENTS.md", "CLAUDE.md", "LICENSE"):
+            continue
         meta = parse_frontmatter(content)
         if not meta.get("updated"):
             missing_date.append(rel)
