@@ -69,6 +69,15 @@
       "skills": [
         "./skills/vault-doctor"
       ]
+    },
+    {
+      "name": "tech-deck",
+      "description": "High-density engineering keynote presentation layout and declarative PPTX generation",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./skills/tech-deck"
+      ]
     }
   ]
 }
