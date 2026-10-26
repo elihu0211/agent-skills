@@ -45,6 +45,8 @@ python3 scripts/doctor.py [vault-path]
 - 孤兒筆記清單
 - Frontmatter 缺少日期或 MOC 標記的筆記清單
 
+掃描連結前會先剝除 fenced code（` ``` `、`~~~`）與 inline code，故程式碼中的 `[[ ... ]]`（如 shell 條件式）不計為斷鏈；忽略目錄（`.git`、`.claude`、`scripts`、`evals` 等）以相對於 vault 根的路徑比對。回歸測試：`python3 scripts/test_doctor.py`。
+
 ## 修復流程
 
 當診斷出異常時，遵循以下順序修復：
