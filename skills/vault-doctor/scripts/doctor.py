@@ -33,12 +33,39 @@ def parse_frontmatter(content: str) -> dict[str, str]:
     return meta
 
 
+FENCE_OPEN = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+INLINE_CODE = re.compile(r"(`+)(?:(?!\1).)+?\1")
+ALWAYS_IGNORED = {".git", ".obsidian", ".serena", ".agents", ".claude", "node_modules"}
+ROOT_IGNORED = {"scripts", "evals"}
+
+
+def is_ignored(rel: Path) -> bool:
+    """依相對於 vault 根的路徑判斷是否忽略，避免 vault 本身位於 .claude 等目錄下時全數被排除。"""
+    parts = rel.parts
+    return any(part in ALWAYS_IGNORED for part in parts[:-1]) or parts[0] in ROOT_IGNORED
+
+
+def strip_code(content: str) -> str:
+    """移除 fenced code（``` 與 ~~~）與 inline code，避免 `[[ -t 1 ]]` 之類被誤判為 wikilink。"""
+    out = []
+    fence = None
+    for line in content.splitlines():
+        m = FENCE_OPEN.match(line)
+        if fence is None:
+            if m:
+                fence = m.group(1)
+                continue
+            out.append(INLINE_CODE.sub("", line))
+        elif m and m.group(1)[0] == fence[0] and len(m.group(1)) >= len(fence) and line.strip() == m.group(1):
+            fence = None
+    return "\n".join(out)
+
+
 def run_doctor(vault_dir: Path) -> int:
     vault_dir = vault_dir.resolve()
     print(f"\n🔍 開始診斷技術知識庫：{vault_dir}\n")
 
-    ignored_dirs = {".git", ".obsidian", ".serena", ".agents", ".claude", "node_modules", "scripts", "evals"}
-    md_files = [p for p in vault_dir.rglob("*.md") if not any(part in ignored_dirs for part in p.parts)]
+    md_files = [p for p in vault_dir.rglob("*.md") if not is_ignored(p.relative_to(vault_dir))]
     total_notes = len(md_files)
     print(f"📄 發現 Markdown 筆記總數：{total_notes}")
 
@@ -101,7 +128,7 @@ def run_doctor(vault_dir: Path) -> int:
         if p.name in ("README.md", "AGENTS.md", "CLAUDE.md"):
             continue
 
-        for m in wikilink_pat.finditer(content):
+        for m in wikilink_pat.finditer(strip_code(content)):
             raw_target = m.group(1).strip()
             # 排除 CI 筆記常見的 TOML table 表頭（例如 [[runners]]）
             if raw_target in ("runners", "runners.kubernetes.volumes.pvc", "registry", "registry.mirror"):

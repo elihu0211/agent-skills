@@ -27,6 +27,15 @@
         "檢查 MOC 筆記是否標記 type: moc 與 tags: [moc]",
         "確認別名 aliases 是否與全庫其他筆記或首頁撞名"
       ]
+    },
+    {
+      "id": "ignore-code-blocks",
+      "query": "健檢知識庫時，筆記的 bash 程式碼區塊裡有 [[ -t 1 ]] 條件式，被誤報成斷鏈，怎麼辦？",
+      "expected_behavior": [
+        "說明診斷腳本在比對 wikilink 前會剝除 fenced code 與 inline code",
+        "確認 [[ -t 1 ]] 之類 shell 條件式不再計為斷鏈，真正的斷鏈仍會回報",
+        "忽略目錄以相對於 vault 根的路徑比對"
+      ]
     }
   ]
 }
