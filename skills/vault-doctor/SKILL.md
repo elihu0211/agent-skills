@@ -3,13 +3,18 @@ name: vault-doctor
 description: >-
   用於檢核、診斷、修復或維護 Obsidian 技術知識庫（Tech Vault）的結構健康度時：
   稽核孤兒筆記、損壞斷鏈（broken wikilinks）、Frontmatter 與別名合規性、
-  章節模板對稱性（二層目錄與 0 章首），並輸出健康報告或自動修復。
+  章節模板對稱性（二層目錄與 0 章首），並輸出健康報告與修復建議（腳本唯讀）。
+compatibility: 需要 python3（僅標準函式庫）；搬移檔案修復時需要 git。
 license: MIT
 ---
 
 # 知識庫健檢與結構治理（Vault Doctor）
 
 維護 Markdown 技術知識庫（Obsidian Vault）的結構對稱性、引用拓撲與元數據衛生。確保知識庫維持「弱資料夾、強連結、對稱章節模板與動態檢索」的工程標準。
+
+## 先讀
+
+- 消費端 repo 的 `AGENTS.md`：知識庫若已定義自己的章節模板、檔名或 frontmatter 欄位，以它為準；本技能的檔名（`Index.md`、`庫首頁.md`、`0 章首.md`）是預設慣例。
 
 ## 核心稽核維度
 
@@ -32,7 +37,7 @@ license: MIT
 
 ## 執行健檢
 
-執行內建診斷腳本：
+執行內建診斷腳本（路徑相對於本技能目錄；腳本唯讀，有結構斷鏈時結束碼為 1）：
 
 ```bash
 python3 scripts/doctor.py [vault-path]
@@ -61,3 +66,8 @@ python3 scripts/doctor.py [vault-path]
    - 將孤兒筆記之 Wikilink 補入該章節 `0 章首.md` 的「筆記索引」區塊。
 4. **校正元數據**：
    - 補齊缺失的 `updated` 日期與 `tags: [moc]` 標籤。
+
+## 規則
+
+- 診斷腳本不改檔；修復由 agent 依上述流程手動進行，搬移一律 `git mv`。
+- 修復後必須重跑腳本，斷鏈為 0 才算完成。
