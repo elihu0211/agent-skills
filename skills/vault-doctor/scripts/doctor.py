@@ -18,6 +18,9 @@ import sys
 from pathlib import Path
 
 
+ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
 def parse_frontmatter(content: str) -> dict[str, str]:
     if not content.startswith("---\n"):
         return {}
@@ -130,9 +133,6 @@ def run_doctor(vault_dir: Path) -> int:
 
         for m in wikilink_pat.finditer(strip_code(content)):
             raw_target = m.group(1).strip()
-            # 排除 CI 筆記常見的 TOML table 表頭（例如 [[runners]]）
-            if raw_target in ("runners", "runners.kubernetes.volumes.pvc", "registry", "registry.mirror"):
-                continue
 
             referenced_stems.add(raw_target)
             referenced_stems.add(Path(raw_target).name)
@@ -178,21 +178,21 @@ def run_doctor(vault_dir: Path) -> int:
         if p.name in ("README.md", "AGENTS.md", "CLAUDE.md", "LICENSE"):
             continue
         meta = parse_frontmatter(content)
-        if not meta.get("updated"):
+        if not ISO_DATE.match(meta.get("updated", "").strip("\"'")):
             missing_date.append(rel)
         if p.name in ("Index.md", "庫首頁.md"):
             tags = meta.get("tags", "")
-            if "moc" not in tags:
+            if "moc" not in tags or meta.get("type") != "moc":
                 missing_moc_tag.append(rel)
 
     print(f"\n🏷️ Frontmatter 元數據健康度：")
     if missing_date:
-        print(f"  ⚠️ {len(missing_date)} 篇筆記缺少 updated 更新日期")
+        print(f"  ⚠️ {len(missing_date)} 篇筆記缺少 ISO 格式（YYYY-MM-DD）的 updated 日期")
     else:
         print("  ✅ 所有筆記均包含 updated 日期")
 
     if missing_moc_tag:
-        print(f"  ⚠️ {len(missing_moc_tag)} 份 MOC 首頁缺少 tags: [moc] 標記")
+        print(f"  ⚠️ {len(missing_moc_tag)} 份 MOC 首頁缺少 type: moc 或 tags: [moc] 標記")
     else:
         print("  ✅ 所有 MOC 筆記均標記 tags: [moc]")
 
