@@ -64,7 +64,16 @@ def strip_code(content: str) -> str:
     return "\n".join(out)
 
 
-def run_doctor(vault_dir: Path) -> int:
+DEFAULTS = {
+    "index": "Index.md",
+    "theme_home": "庫首頁.md",
+    "overview_dir": "00 總論",
+    "chapter_home": "0 章首.md",
+}
+
+
+def run_doctor(vault_dir: Path, names: dict[str, str] | None = None) -> int:
+    n = {**DEFAULTS, **(names or {})}
     vault_dir = vault_dir.resolve()
     print(f"\n🔍 開始診斷技術知識庫：{vault_dir}\n")
 
@@ -88,9 +97,9 @@ def run_doctor(vault_dir: Path) -> int:
             print(f"⚠️ 無法讀取檔案 {rel}: {e}")
 
     # 1. 檢查 Index.md
-    index_file = vault_dir / "Index.md"
+    index_file = vault_dir / n["index"]
     has_index = index_file.is_file()
-    print(f"🏠 全庫總入口 Index.md：{'✅ 存在' if has_index else '❌ 缺失'}")
+    print(f"🏠 全庫總入口 {n['index']}：{'✅ 存在' if has_index else '❌ 缺失'}")
 
     # 2. 檢查主題結構對稱性
     theme_dirs = [d for d in vault_dir.iterdir() if d.is_dir() and not d.name.startswith((".", "scripts", "evals", "template", "node_modules"))]
@@ -98,20 +107,20 @@ def run_doctor(vault_dir: Path) -> int:
 
     structure_errors = []
     for theme in sorted(theme_dirs):
-        theme_home = theme / "庫首頁.md"
+        theme_home = theme / n["theme_home"]
         if not theme_home.is_file():
-            structure_errors.append(f"{theme.name}: 缺少 庫首頁.md")
+            structure_errors.append(f"{theme.name}: 缺少 {n['theme_home']}")
 
-        overview_dir = theme / "00 總論"
-        overview_home = overview_dir / "0 章首.md"
+        overview_dir = theme / n["overview_dir"]
+        overview_home = overview_dir / n["chapter_home"]
         if not overview_dir.is_dir() or not overview_home.is_file():
-            structure_errors.append(f"{theme.name}: 缺少 00 總論/0 章首.md")
+            structure_errors.append(f"{theme.name}: 缺少 {n['overview_dir']}/{n['chapter_home']}")
 
         chapters = [c for c in theme.iterdir() if c.is_dir() and not c.name.startswith(".")]
         for c in sorted(chapters):
-            c_home = c / "0 章首.md"
+            c_home = c / n["chapter_home"]
             if not c_home.is_file():
-                structure_errors.append(f"{theme.name}/{c.name}: 缺少 0 章首.md")
+                structure_errors.append(f"{theme.name}/{c.name}: 缺少 {n['chapter_home']}")
 
     if structure_errors:
         print(f"  ❌ 發現 {len(structure_errors)} 處結構不符合統一模板：")
@@ -157,7 +166,7 @@ def run_doctor(vault_dir: Path) -> int:
         rel_str = str(rel.with_suffix(""))
         stem = p.stem
         # Index.md 與特定根文件不計為孤兒
-        if stem in ("Index", "README", "AGENTS", "CLAUDE", "庫首頁", "0 章首"):
+        if stem in {Path(n["index"]).stem, Path(n["theme_home"]).stem, Path(n["chapter_home"]).stem, "README", "AGENTS", "CLAUDE"}:
             continue
         if stem not in referenced_stems and rel_str not in referenced_stems:
             orphans.append(rel)
@@ -180,7 +189,7 @@ def run_doctor(vault_dir: Path) -> int:
         meta = parse_frontmatter(content)
         if not ISO_DATE.match(meta.get("updated", "").strip("\"'")):
             missing_date.append(rel)
-        if p.name in ("Index.md", "庫首頁.md"):
+        if p.name in (n["index"], n["theme_home"]):
             tags = meta.get("tags", "")
             if "moc" not in tags or meta.get("type") != "moc":
                 missing_moc_tag.append(rel)
@@ -210,8 +219,10 @@ def run_doctor(vault_dir: Path) -> int:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Obsidian Tech Vault 健康度診斷工具")
     parser.add_argument("vault", nargs="?", default=".", help="知識庫根目錄路徑（預設當前目錄）")
+    for key, default in DEFAULTS.items():
+        parser.add_argument(f"--{key.replace('_', '-')}", default=default, help=f"預設 {default}")
     args = parser.parse_args()
-    sys.exit(run_doctor(Path(args.vault)))
+    sys.exit(run_doctor(Path(args.vault), {k: getattr(args, k) for k in DEFAULTS}))
 
 
 if __name__ == "__main__":
