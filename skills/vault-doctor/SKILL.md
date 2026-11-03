@@ -3,7 +3,7 @@ name: vault-doctor
 description: >-
   用於檢核、診斷、修復或維護 Obsidian 技術知識庫（Tech Vault）的結構健康度時：
   稽核孤兒筆記、損壞斷鏈（broken wikilinks）、Frontmatter 與別名合規性、
-  章節模板對稱性（二層目錄與 0 章首），並輸出健康報告與修復建議（腳本唯讀）。
+  章節模板對稱性（二層目錄與 0 章首）、wikilink 誤報（如程式碼區塊裡的 [[ ]]），並輸出健康報告與修復建議（腳本唯讀）。
 compatibility: 需要 python3（僅標準函式庫）；搬移檔案修復時需要 git。
 license: MIT
 ---
