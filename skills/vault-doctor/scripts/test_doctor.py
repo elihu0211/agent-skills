@@ -50,6 +50,19 @@ def test_ignore_is_relative_to_vault_root():
         assert run_doctor(root) == 1  # vault 內的 .claude 仍被忽略（不新增斷鏈）
 
 
+def test_custom_names():
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        (root / "Home.md").write_text(FM + "[[Hub]]\n", encoding="utf-8")
+        (root / "T").mkdir()
+        (root / "T" / "Hub.md").write_text(FM, encoding="utf-8")
+        (root / "T" / "Intro").mkdir()
+        (root / "T" / "Intro" / "Start.md").write_text(FM, encoding="utf-8")
+        names = {"index": "Home.md", "theme_home": "Hub.md", "overview_dir": "Intro", "chapter_home": "Start.md"}
+        assert run_doctor(root, names) == 0
+        assert run_doctor(root) == 1  # 預設名稱找不到 → 結構異常
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):

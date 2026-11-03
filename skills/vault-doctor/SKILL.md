@@ -14,7 +14,7 @@ license: MIT
 
 ## 先讀
 
-- 消費端 repo 的 `AGENTS.md`：知識庫若已定義自己的章節模板、檔名或 frontmatter 欄位，以它為準；本技能的檔名（`Index.md`、`庫首頁.md`、`0 章首.md`）是預設慣例。
+- 消費端 repo 的 `AGENTS.md`：知識庫若已定義自己的章節模板、檔名或 frontmatter 欄位，以它為準；本技能的檔名（`Index.md`、`庫首頁.md`、`00 總論`、`0 章首.md`）是預設慣例，可用 `--index`、`--theme-home`、`--overview-dir`、`--chapter-home` 覆寫。
 
 ## 核心稽核維度
 
