@@ -8,7 +8,7 @@
 |------|------|
 | [`open-pull-request`](skills/open-pull-request) | 從未提交的變更到已開啟的 GitHub PR／GitLab MR，含 squash auto-merge 與狀態查驗 |
 | [`clean-merged-branches`](skills/clean-merged-branches) | 稽核並刪除已合併的遠端分支、本機追蹤分支與 worktree |
-| [`maintain-agent-context`](skills/maintain-agent-context) | 維護 `AGENTS.md`、`CLAUDE.md`、`.agents/skills` 與 `skills-lock.json` |
+| [`maintain-agent-context`](skills/maintain-agent-context) | 維護 `AGENTS.md`（預設不放 `CLAUDE.md`）、`.agents/skills` 與 `skills-lock.json` |
 | [`name-files`](skills/name-files) | 檔案與目錄命名、文件為主的 repo 結構 |
 | [`structure-docs`](skills/structure-docs) | 以 Diátaxis 組織 `docs/` |
 | [`dsrm-technical-report`](skills/dsrm-technical-report) | 撰寫與審查 DSRM 技術報告 |
