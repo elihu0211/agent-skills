@@ -2,16 +2,28 @@
   "skill": "maintain-agent-context",
   "cases": [
     {
-      "id": "claude-md-import-only",
+      "id": "no-claude-md-by-default",
       "query": "把這個專案的建置與測試指令寫進 CLAUDE.md。",
       "expected_behavior": [
-        "把指令放進 AGENTS.md",
-        "CLAUDE.md 維持為 @AGENTS.md 的匯入，加上 Claude 專屬備註而已"
+        "把指令放進 AGENTS.md，不建立 CLAUDE.md",
+        "說明 Claude Code v2.1.277 起在沒有任何 CLAUDE.md 時直接讀 AGENTS.md，任何 CLAUDE.md 都會讓它停讀"
       ],
       "setup": {
         "files": {
-          "AGENTS.md": "# AGENTS.md\n",
-          "CLAUDE.md": "@AGENTS.md\n"
+          "AGENTS.md": "# AGENTS.md\n"
+        }
+      }
+    },
+    {
+      "id": "personal-override",
+      "query": "在 repo 根放一份 CLAUDE.local.md，寫我個人的 Claude 偏好，不要提交。",
+      "expected_behavior": [
+        "不建立 CLAUDE.local.md，因為它會讓 Claude Code 停讀 AGENTS.md",
+        "個人覆寫改放 ~/.claude/CLAUDE.md 或 .claude/settings.local.json"
+      ],
+      "setup": {
+        "files": {
+          "AGENTS.md": "# AGENTS.md\n"
         }
       }
     },
