@@ -1,7 +1,7 @@
 # 分支清理：已知會產生假結論的陷阱
 
-`gitlab-branch-cleanup` / `github-branch-cleanup` 兩支 skill 共用的說明。以下每一條都已在
-`audit.sh` / `occupancy.sh` 內處理掉，列出來是為了**不要**在對話裡重新發明這些判斷。
+GitHub 與 GitLab 共用同一份判定。以下每一條都已在 `audit.sh` / `occupancy.sh` 內處理掉，
+列出來是為了**不要**在對話裡重新發明這些判斷。
 
 ## 判定「貢獻是否已進 main」
 
@@ -33,13 +33,12 @@ squash commit——兩者的 `SHA^1` 都等於「合併前的 main」，所以 `
 **`diff` 可能被別名成 delta。** `diff -q` 直接報 unknown argument，`if` 判斷落到錯的分支。用
 `cmp -s`／`comm`。腳本以 `#!/usr/bin/env bash` 執行時不吃互動 shell 的別名，這是主要防線。
 
-**互動 shell 的 `find` 可能根本是別的程式。** 這台機器上 `find` 是 Claude Code shell snapshot 定義的
-shell function（實際跑 bfs），不接受 `-newermt "-24 hours"` 這種相對時間格式，直接報錯；配上
-`2>/dev/null` 就成了「查無檔案」的假結論——2026-09-06 據此誤判成「該 worktree 24 小時內沒有檔案被
-寫過」，真實情況是 13 小時前才寫過。腳本以 bash 執行時拿到的是 `/usr/bin/find`，語法正常。同理
-`ls` 是 eza，`ls -lt` 的 `-t` 會被當成 `--time <FIELD>` 而整條失敗。**這兩條專坑在對話裡即興下指令
-的人，不坑腳本**——正是判定該留在腳本裡、而非在對話裡重新發明的另一個理由。診斷時也不要把輸出
-接進 `2>/dev/null`／`| tail`，那會把失敗細節切掉再誤歸給被查的對象。
+**互動 shell 的 `find`、`ls`、`diff` 可能根本是別的程式。** 別名或 shell function 會把它們換成
+`bfs`、`eza`、`delta`，旗標與時間格式都不同：`find -newermt "-24 hours"` 報錯，配上 `2>/dev/null`
+就成了「查無檔案」；`ls -lt` 的 `-t` 被當成 `--time <FIELD>` 整條失敗。曾據此誤判「該 worktree
+24 小時內沒有檔案被寫過」，實際上 13 小時前才寫過。腳本以 bash 執行時拿到的是系統內建指令，語法
+正常；**這類陷阱專坑在對話裡即興下指令的人，不坑腳本**，這也是判定該留在腳本裡的理由。診斷時不要把
+輸出接進 `2>/dev/null`／`| tail`，那會把失敗細節切掉再誤歸給被查的對象。
 
 **列 MR/PR 清單不能當刪除依據。** `glab mr list --merged --per-page` / `gh pr list --limit` 都有上限，
 打滿時漏掉更早的項目。改用 `source_branch=` / `--head` 直查單一分支。（另：`glab mr list` 沒有
@@ -62,17 +61,16 @@ pathspec，diff 靜默回空。用 `-z` / `xargs -0`。
 | `wt list` 的 🤖 | agent 執行中 | Ctrl+C 中斷或 session 被砍後永久殘留 |
 | worktree 私有 `logs/HEAD` mtime | 最近做過 git 操作 | 純輪詢／編輯中但沒下 git 指令的 session |
 
-**這台機器上沒有行程層級的事實能證明佔用**：查證過所有 session 的 cwd 都是容器目錄，靠
-`git -C <path>` 操作 worktree。所以 `ACTIVE_WINDOW_SECS` 這個啟發式消不掉，真正的根治是每個
+**行程層級的事實未必能證明佔用**：許多 agent session 的 cwd 是容器目錄，靠
+`git -C <path>` 操作 worktree，`lsof` 看不到它。所以 `ACTIVE_WINDOW_SECS` 這個啟發式消不掉，真正的根治是每個
 session 主動寫帶 PID 的佔用聲明。
 
 **不要為了「一次過」統一加 `--force`。** `git worktree remove` 在有未提交變更時會拒絕，那是最後
 一道防線。`plan.sh` 刻意不加。
 
-**髒檔數突然暴增，可能是另一個 session 正在刪這棵樹，不是有人在寫入。** 2026-09-06：一棵樹在稽核
-當下 0 髒檔、無 lsof、reflog 停在 13 小時前，一分鐘後 `plan.sh` 執行時卻報「有 1520 個未提交變更」，
-再一分鐘後整個目錄消失——那 1520 筆是 `git status` 看到大量檔案被移除而記下的刪除，是清理的中間態，
-不是有人在編輯。擋下來的方向仍然正確（第二道防線本來就該保守），但讀報告時別據此推翻先前的殘留
+**髒檔數突然暴增，可能是另一個 session 正在刪這棵樹，不是有人在寫入。** 曾有一棵樹在稽核當下 0
+髒檔、無 lsof、reflog 停在 13 小時前，一分鐘後 `plan.sh` 卻報「有 1520 個未提交變更」，再一分鐘後
+整個目錄消失——那些是 `git status` 看到大量檔案被移除而記下的刪除，是清理的中間態，不是有人在編輯。擋下來的方向仍然正確（第二道防線本來就該保守），但讀報告時別據此推翻先前的殘留
 判定、也別去追查「誰在寫」：先看目錄還在不在。並行 session 會同時清同一批，這是常態不是異常。
 
 **🤖 過期時要講出來，不要靜默永久跳過。** 老標記仍然擋（fail-safe），但會印出年齡與

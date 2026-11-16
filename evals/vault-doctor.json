@@ -36,6 +36,15 @@
         "確認 [[ -t 1 ]] 之類 shell 條件式不再計為斷鏈，真正的斷鏈仍會回報",
         "忽略目錄以相對於 vault 根的路徑比對"
       ]
+    },
+    {
+      "id": "machine-readable-report",
+      "query": "幫我健檢 vault，把所有問題列成 JSON，連孤兒筆記和別名撞名也要算進失敗。",
+      "expected_behavior": [
+        "執行 scripts/doctor.py 並加 --json 取得完整結構化結果",
+        "加 --strict，讓孤兒、Frontmatter 缺漏與 aliases 撞名也使結束碼為 1",
+        "不直接修改檔案；依修復順序提出建議，搬移用 git mv，修復後重跑確認"
+      ]
     }
   ]
 }

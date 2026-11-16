@@ -15,6 +15,11 @@
 #   FORGE               gitlab|github（預設從 origin URL 自動認）
 set -uo pipefail
 
+case "${1:-}" in -h|--help)
+  sed -n '2,/^set -uo/p' "${BASH_SOURCE[0]}" | sed '$d' | sed 's/^# \{0,1\}//'
+  exit 0 ;;
+esac
+
 LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=occupancy.sh
 . "$LIB_DIR/occupancy.sh"
@@ -45,7 +50,7 @@ MR_QUERY="${MR_QUERY:-forge_mr_query}"
 printf '== repo: %s\n== forge: %s\n== outdir: %s\n\n' "$REPO" "$FORGE" "$OUTDIR"
 
 # ---- 1. 同步遠端 ---------------------------------------------------------
-# 裸 git，不走 rtk：rtk 改寫輸出，且曾對 fetch 靜默 rebase + force-push。
+# 用裸 git：不經任何會改寫輸出或附加行為的 wrapper（曾有 wrapper 對 fetch 靜默 rebase + force-push）。
 git -C "$REPO" fetch --prune origin >/dev/null 2>&1 || { printf 'fetch 失敗，中止\n' >&2; exit 1; }
 
 # ---- 2. 候選分支：本機還在、upstream 已 gone -----------------------------

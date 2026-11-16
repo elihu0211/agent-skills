@@ -1,9 +1,8 @@
 ---
 name: open-pull-request
 description: >-
-  把目前工作樹帶到已開啟的 GitHub PR 或 GitLab MR，含 conventional commit 標題、squash、auto-merge，
-  並查驗真實的合併狀態。用於開 PR／MR、提交（commit）變更、送審、設定自動合併，
-  或預設分支上有未提交變更時。
+  把目前工作樹帶到已開啟的 GitHub PR 或 GitLab MR：分支、conventional commit、push、squash auto-merge，並向平台查驗真實狀態。
+  用於開 PR／MR、提交（commit）變更、送審、設定自動合併，或預設分支上有未提交變更時。
 compatibility: 需要 git，以及已登入的 gh（GitHub）或 glab（GitLab），且能連到該平台。
 license: MIT
 ---

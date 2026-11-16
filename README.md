@@ -84,13 +84,13 @@ skills-update:
 1. 複製 [`template/`](template) 為 `skills/<name>/`，並把 `SKILL.template.md` 改名為 `SKILL.md`。範本不叫 `SKILL.md`，因為 skills CLI 會把它當成可安裝技能。規範見 [`AGENTS.md`](AGENTS.md)。
 2. 加進 [`.claude-plugin/marketplace.json`](.claude-plugin/marketplace.json)。
 3. 新增 `evals/<name>.json`，至少 3 個情境（`query`、`expected_behavior`）。先從「沒有此技能時 agent 會做錯的任務」寫起，再寫技能本文。
-4. 驗證：`uv run scripts/validate.py`；技能有腳本時加跑 `bash skills/<name>/scripts/test.sh`。
+4. 驗證：`uv run scripts/validate.py`；技能有腳本時加跑 `bash skills/<name>/scripts/test.sh`。測試入口一律命名 `scripts/test.sh`（CI 只執行這個檔名，validate 會檢查）；腳本須能非互動執行並提供 `--help`。
 5. 量測觸發率：`uv run scripts/run_evals.py --runs 3 [--only <name>]`。
 6. 開 PR。
 
 ### 觸發率量測
 
-每個情境在全新的暫時 git repo 以 plan 模式執行 `claude -p`（禁用 Bash／Edit／Write，無副作用），統計 agent 是否載入預期技能，另有 4 個不該觸發的對照情境。
+每個情境在全新的暫時 git repo 以 plan 模式執行 `claude -p`（禁用 Bash／Edit／Write，無副作用），統計 agent 是否載入預期技能，另有 7 個不該觸發的對照情境（含 3 個主題相鄰的近似誤觸發）。`claude` 執行失敗（額度用盡、未登入）時整批中止並印出原因，不會把失敗當成 0% 觸發率。
 
 情境欄位：
 

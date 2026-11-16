@@ -35,6 +35,7 @@ license: MIT
 
 ## 技能檢核
 
-- 目錄名 == frontmatter `name`；`description` 寫明做什麼 + 何時用。
-- `SKILL.md` 精簡；細節放 `references/` 或 `scripts/`。
+- 目錄名 == frontmatter `name`；`description` 寫明做什麼 + 何時用，關鍵用途與觸發詞放前段（技能清單有字數預算，長描述會被截斷）。
+- `SKILL.md` 控制在 500 行內；細節放 `references/`（只連一層，超過 100 行加目錄）、可執行的放 `scripts/`、範本放 `assets/`。
+- 腳本要能在 agent 的非互動 shell 執行：不開提示、有 `--help`、失敗時 stderr 說明原因、輸出長度可控（`--limit`）、需要解析時提供 `--json`。
 - 連結權威來源（`AGENTS.md`、官方文件），不複製會漂移的事實。

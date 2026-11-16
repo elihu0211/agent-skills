@@ -29,6 +29,10 @@ NEGATIVES = [
     "解釋 TCP 三向交握與四向揮手的差別。",
     "幫我寫一個計算費氏數列的函式，附單元測試。",
     "這個專案的 git log 最近 5 筆是什麼？",
+    # 近似誤觸發：主題相鄰，但需求是概念解釋或一般編輯，不該載入任何技能
+    "git rebase 和 git merge 的差別是什麼？什麼情況該用哪個？",
+    "把這篇 Obsidian 筆記的內文翻譯成英文，保留 Markdown 格式。",
+    "Markdown 的表格語法怎麼寫？怎麼設定欄位靠右對齊？",
 ]
 
 
@@ -36,7 +40,7 @@ def run_once(query: str, model: str, setup: dict | None = None) -> set[str]:
     """回傳這次對話裡被呼叫的技能名稱集合。"""
     with tempfile.TemporaryDirectory() as tmp:
         subprocess.run(["git", "init", "-q", "-b", "main", tmp], check=True)
-        # 六個技能都以專案技能形式提供，與全域已安裝與否無關
+        # 全部技能都以專案技能形式提供，與全域已安裝與否無關
         shutil.copytree(ROOT / "skills", Path(tmp) / ".claude" / "skills")
         # 情境可帶 setup：files 先 commit，dirty 寫成未提交的變更，讓 agent 面對真實的 repo 狀態
         setup = setup or {}
@@ -68,11 +72,16 @@ def run_once(query: str, model: str, setup: dict | None = None) -> set[str]:
         except subprocess.TimeoutExpired:
             return {"<timeout>"}
     used: set[str] = set()
+    finished = False
     for line in out.splitlines():
         try:
             ev = json.loads(line)
         except ValueError:
             continue
+        if ev.get("type") == "result":
+            finished = True
+            if ev.get("is_error"):
+                return {f"<error: {str(ev.get('result', ''))[:80]}>"}
         if ev.get("type") != "assistant":
             continue
         for block in ev.get("message", {}).get("content", []):
@@ -86,7 +95,8 @@ def run_once(query: str, model: str, setup: dict | None = None) -> set[str]:
                 parts = Path(str(inp.get("file_path", ""))).parts
                 if "skills" in parts and parts[-1] == "SKILL.md":
                     used.add(parts[-2])
-    return used
+    # 沒有 result 事件代表 CLI 沒跑完（額度用盡、未登入…），不能當成「沒觸發」
+    return used if finished else {"<error: claude 沒有回傳 result 事件>"}
 
 
 def main() -> None:
@@ -110,6 +120,11 @@ def main() -> None:
     tasks = [(j, r) for j in jobs for r in range(args.runs)]
     with ThreadPoolExecutor(max_workers=6) as pool:
         results = list(pool.map(lambda t: (t[0], run_once(t[0][3], args.model, t[0][4])), tasks))
+
+    errors = sorted({u for _, used in results for u in used if u.startswith(("<error", "<timeout"))})
+    if errors:
+        # 量測失敗不等於 0% 觸發率；直接中止，避免誤導
+        raise SystemExit("量測中止，claude 執行失敗：\n  " + "\n  ".join(errors))
 
     table: dict[tuple, list[bool]] = {}
     seen: dict[tuple, list[set[str]]] = {}

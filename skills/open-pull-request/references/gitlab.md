@@ -12,7 +12,7 @@
 GLAB_NO_PROMPT=1 perl -e 'alarm 60; exec @ARGV' glab mr create \
   --source-branch <分支> --target-branch <預設分支> \
   --squash-before-merge --remove-source-branch \
-  --title "<type(scope): 摘要>" --description "$(cat body.md)" --yes </dev/null
+  --title "<type(scope): 摘要>" --description-file body.md --yes </dev/null
 ```
 
 逾時就先列出 MR：MR 可能已經建好。沒有的話改用 API，不要重試指令：
@@ -25,7 +25,7 @@ glab api --hostname <host> -X POST "projects/:id/merge_requests" \
 
 ## auto-merge
 
-用 API。`glab mr merge` 可能印出成功訊息卻只是排入佇列，或在 pipeline 還在啟動時回 405（上游 issue [#7243](https://gitlab.com/gitlab-org/cli/-/work_items/7243)）：
+用 API，結果可預期。`glab mr merge` 在 pipeline 執行中預設就是設 auto-merge（`--auto-merge` 預設 true，另有 `--sha`、`--squash`、`--remove-source-branch`），但可能印出成功訊息卻只是排入佇列；要求「必須通過 pipeline」的專案在 pipeline 失敗或尚未建立時，底層 API 回 405。上游 issue [#7243](https://gitlab.com/gitlab-org/cli/-/work_items/7243) 於 2025-01 關閉，只是把 405 改成友善錯誤訊息，API 行為沒變。要用 CLI 時加 `--sha "$(git rev-parse HEAD)"`，並照下方「查驗」確認真實狀態：
 
 ```bash
 glab api --hostname <host> -X PUT "projects/:id/merge_requests/<iid>/merge" \
@@ -63,3 +63,7 @@ git push -u origin HEAD -o merge_request.create -o merge_request.target=<預設�
 ```
 
 描述不能含真正的換行；用 `%0A`。
+
+## 核對紀錄
+
+2026-11-16 以 `glab 1.130.0` 的 `mr create --help`／`mr merge --help` 核對旗標（`--description-file`、`--squash-before-merge`、`--remove-source-branch`、`--auto-merge`、`--sha` 存在），並讀 issue #7243 狀態；API 欄位以 GitLab 文件為準，未在每個版本的實例上逐一重測。

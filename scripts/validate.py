@@ -115,6 +115,11 @@ def check_skill(skill: Path) -> None:
             if path and not (md.parent / path).exists():
                 errors.append(f"{md.relative_to(ROOT)}: 連結失效 {target}")
 
+    scripts = skill / "scripts"
+    if scripts.is_dir() and not (scripts / "test.sh").is_file():
+        tests = sorted(p.name for p in scripts.glob("test*") if p.is_file())
+        if tests:
+            errors.append(f"{rel}/scripts: 有測試檔 {', '.join(tests)} 卻沒有 test.sh；CI 只執行 scripts/test.sh")
 
     skill_text = manifest.read_text(encoding="utf-8")
     for ref in sorted((skill / "references").glob("*.md")) if (skill / "references").is_dir() else []:
