@@ -13,8 +13,10 @@ gh pr create --title "<type(scope): 摘要>" --body-file body.md
 ## auto-merge
 
 ```bash
-gh pr merge <編號> --auto --squash --delete-branch
+gh pr merge <編號> --auto --squash --delete-branch --match-head-commit "$(git rev-parse HEAD)"
 ```
+
+`--match-head-commit` 確保只合併你剛 push 的那個 commit；之後有人再推新 commit，這個指令就不會把它一起合併。
 
 CI 尚未啟動時，等幾秒再重試一次。
 
@@ -29,3 +31,7 @@ gh pr view <編號> --json state,autoMergeRequest,mergeStateStatus
 ## 要能辨識的失敗
 
 - 每個 job 都因帳號帳務或額度上限而無法啟動：這是帳號層級問題，與變更無關。說明後停止，不要反覆重試合併。
+
+## 核對紀錄
+
+2026-11-16 以 `gh 2.104.0` 的 `pr create --help`／`pr merge --help` 核對旗標（`--body-file`、`--draft`、`--auto`、`--squash`、`--delete-branch`、`--match-head-commit` 存在）。

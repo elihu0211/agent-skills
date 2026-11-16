@@ -116,7 +116,7 @@ git -C "$REPO" switch -q feat/synced
 git -C "$REPO" merge -q main -m "sync with main"
 
 # --- 情形 5：分支合併後被同步成 main 上較早的一顆 commit ---------------------
-# 實地形狀（2026-09-06）：分支 tip 的訊息是 "Merge branch '<別支>' into 'main'"——它早
+# 實地形狀：分支 tip 的訊息是 "Merge branch '<別支>' into 'main'"——它早
 # 被快轉/重置到當時的 main，之後 main 又繼續前進。分支的 diff-from-merge-base 因此涵蓋
 # 期間別人的工作，而那些檔案 main 後來又改過，「與現在 main 逐位元組相同」整批失效，
 # 22 個檔案一起誤報 NEEDS_HUMAN。tip 落在 first-parent 主線上就該直接放行。
