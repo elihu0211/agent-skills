@@ -68,7 +68,8 @@ def run_once(query: str, model: str, setup: dict | None = None) -> set[str]:
             "--max-turns", "6",
         ]
         try:
-            out = subprocess.run(cmd, cwd=tmp, capture_output=True, text=True, timeout=240).stdout
+            proc = subprocess.run(cmd, cwd=tmp, capture_output=True, text=True, timeout=240)
+            out = proc.stdout
         except subprocess.TimeoutExpired:
             return {"<timeout>"}
     used: set[str] = set()
@@ -81,7 +82,12 @@ def run_once(query: str, model: str, setup: dict | None = None) -> set[str]:
         if ev.get("type") == "result":
             finished = True
             if ev.get("is_error"):
-                return {f"<error: {str(ev.get('result', ''))[:80]}>"}
+                # 回合上限代表 agent 還在讀檔，技能呼叫已經發生，這次仍可計入觸發
+                if ev.get("subtype") == "error_max_turns":
+                    used.add("<max-turns>")
+                else:
+                    detail = ev.get("result") or "; ".join(ev.get("errors") or []) or ev.get("subtype")
+                    return {f"<error: {str(detail)[:80]}>"}
         if ev.get("type") != "assistant":
             continue
         for block in ev.get("message", {}).get("content", []):
