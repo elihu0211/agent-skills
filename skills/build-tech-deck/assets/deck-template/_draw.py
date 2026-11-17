@@ -30,7 +30,6 @@ def runs(par: Any, text: str, size: float, color: RGBColor, bold: bool = False, 
             continue
         r = par.add_run()
         r.text = part
-        r.font.name = T.FONT
         r.font.size = Pt(size)
         is_bold = bold or (i % 2 == 1)
         r.font.bold = is_bold

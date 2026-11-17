@@ -17,7 +17,7 @@ license: MIT
 
 1. **複製範本**：把 [`assets/deck-template/`](assets/deck-template) 整個複製到專案的簡報目錄（引擎、`tokens.toml`、`defaults.toml`、`deck_spec.py`、`build_deck.py`、`screens/`；各檔職責見 [references/patterns.md](references/patterns.md)「引擎分層」）。
 2. **只改 `deck_spec.py`**：`SPEC` 含封面與每頁一筆 `(章節標籤, 主標題, [(區塊, 欄位)], 講稿備註)`。範本十一頁涵蓋全部區塊，替換內容、刪掉不用的頁。要改色票改 `tokens.toml`，不改 `theme.py`；封面作者預設在 `defaults.toml`。
-3. **建置**：`uv run build_deck.py out.pptx`（`--pdf` 另以 PowerPoint 匯出向量 PDF）。
+3. **建置**：`uv run build_deck.py out.pptx`（`--pdf` 另以 PowerPoint 匯出向量 PDF；`--emit-template` 匯出範本、`--template` 用自己編輯過母片的範本）。
 4. **跑兩支 lint**：`uv run <技能路徑>/scripts/lint_wrap.py out.pptx`（零折行）與 `uv run <技能路徑>/scripts/lint_names.py out.pptx`（白話命名；專案的倉庫與服務代號用 `--deny` 帶入）。有違規就改寫該行文字，不是調字級，重跑到通過。
 5. **目視**：轉 PDF 或圖片逐頁看。lint 以字寬估算，字型與應用程式不同會有差異。
 
@@ -36,6 +36,7 @@ license: MIT
 
 ## 規則
 
+- 標題、章節標籤、頁尾與頁碼是版面的佔位符，不手畫文字方塊；外觀改 `tokens.toml` 或範本的母片，不在規格裡逐頁調。
 - 連線標籤的文字框一律透明，不用白底方塊蓋住泳道。
 - 表格明確設定 `col_w` 欄寬比例；儲存格可寫 `(文字, "green"|"red"|"blue"|"amber")` 做語義高亮。
 - 兩支 lint 沒通過、或沒逐頁看過渲染結果，不回報完成。

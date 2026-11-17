@@ -70,9 +70,24 @@
 | `theme.py` | 把規格換成 python-pptx 的色與卡片樣式 | 新增 `kind` |
 | `_draw.py` | 繪製原語：文字、線、圓角卡片、徽章、表格框線 | 新的畫法 |
 | `blocks.py` | 區塊與其高度規劃，`BLOCKS` 把規格的區塊名對到函式 | 新增區塊 |
-| `deck_engine.py` | 逐頁版面配置（`Deck`）與由規格產出整份簡報（`render`） | 版型變動 |
+| `deck_template.py` | 由 `tokens.toml` 產生真正的 PPTX 範本：佈景主題、母片、八個版面；範本契約的檢查 | 新增版面、換母片結構 |
+| `deck_engine.py` | 逐頁版面配置（`Deck`）與由規格產出整份簡報（`render`）：填版面的佔位符、畫區塊 | 版型變動 |
 | `qmd_export.py` | 規格層共用工具（`SpecError`、`author_of`）與規格轉 `index.qmd`；純標準庫 | 規格欄位變動 |
 | `defaults.toml`、`deck_spec.py`、`build_deck.py` | 專案層預設、簡報內容、建置入口 | 每份簡報 |
+
+### 範本：佈景主題、母片、版面
+
+與 Quarto、pandoc 的 `reference-doc` 同一個模型：範本是一份 `.pptx`，版面以名稱找，內容放進版面的佔位符。標題、章節標籤、頁尾與頁碼是佔位符，不是文字方塊，所以大綱檢視、閱讀順序、「重設投影片」與換佈景主題都照 PowerPoint 的規矩運作。
+
+| 版面 | 佔位符 idx | 說明 |
+| :--- | :--- | :--- |
+| `Title Slide` | 題名 0、副題 1、類別 13、作者 14 | 封面，沒有頁尾；作者為空就移除該佔位符 |
+| `Title Only` | 標題 0、章節標籤 13、頁尾 11、頁碼 12 | 內容頁；內容區是自由畫布，區塊畫在上面 |
+| 其餘六個 | Office 慣例 | `Title and Content`、`Section Header`、`Two Content`、`Comparison`、`Content with Caption`、`Blank`：名稱與 Quarto、pandoc 查的相同，範本可直接當它們的 `reference-doc` |
+
+- 配色與字型進佈景主題的十二個槽（`accent1` 至 `accent4` 是語義藍、綠、琥珀、玫紅），在 PowerPoint 新增形狀與圖表也用這組色；區塊內的文字不寫字型名稱，由佈景主題決定。
+- 換外觀：改 `tokens.toml`；或 `uv run build_deck.py --emit-template 範本.pptx` 匯出範本，在 PowerPoint 的「投影片母片」檢視編輯，再 `uv run build_deck.py out.pptx --template 範本.pptx`。自備範本保留表中的契約（版面名稱與 idx），缺了就停下並說明。
+- 零折行 lint 會解析佔位符從版面與母片繼承的字級、粗體與內距，標題也檢查。
 
 ## 擴充區塊的守則
 
