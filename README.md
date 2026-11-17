@@ -82,7 +82,7 @@ skills-update:
 
 ## 開發
 
-1. 複製 [`template/`](template) 為 `skills/<name>/`，並把 `SKILL.template.md` 改名為 `SKILL.md`。範本不叫 `SKILL.md`，因為 skills CLI 會把它當成可安裝技能。規範見 [`AGENTS.md`](AGENTS.md)。
+1. 名稱用「動詞＋受詞」（`open-pull-request`），與目錄同名；`description` 第三人稱，先寫做什麼，再寫「用於…」，關鍵用途放前段。複製 [`template/`](template) 為 `skills/<name>/`，並把 `SKILL.template.md` 改名為 `SKILL.md`。範本不叫 `SKILL.md`，因為 skills CLI 會把它當成可安裝技能。規範見 [`AGENTS.md`](AGENTS.md)。
 2. 加進 [`.claude-plugin/marketplace.json`](.claude-plugin/marketplace.json)。
 3. 新增 `evals/<name>.json`，至少 3 個情境（`query`、`expected_behavior`）。先從「沒有此技能時 agent 會做錯的任務」寫起，再寫技能本文。
 4. 驗證：`uv run scripts/validate.py`；技能有腳本時加跑 `bash skills/<name>/scripts/test.sh`。測試入口一律命名 `scripts/test.sh`（CI 只執行這個檔名，validate 會檢查）；腳本須能非互動執行並提供 `--help`。

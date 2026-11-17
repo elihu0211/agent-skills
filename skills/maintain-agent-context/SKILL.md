@@ -15,7 +15,9 @@ license: MIT
 
 ## 規則
 
-1. **預設不放 `CLAUDE.md`。** Claude Code v2.1.277 起，工作目錄及其上層都沒有 `CLAUDE.md`／`CLAUDE.local.md` 時直接讀 `AGENTS.md`（進子目錄時也讀巢狀 `AGENTS.md`）；任何 `CLAUDE.md` 都會讓它停讀，上層目錄（如容器目錄）的也算（[官方文件](https://code.claude.com/docs/en/memory#agents-md)）。個人覆寫放 `~/.claude/CLAUDE.md`（不算數）與 `.claude/settings.local.json`，不放 `CLAUDE.local.md`。只有必須支援 v2.1.277 之前、或讀不到 `AGENTS.md` 的 session（停用內建外掛）時才放 `CLAUDE.md`：以 `@AGENTS.md` 開頭、其餘只放 Claude 專屬備註，且每個有巢狀 `AGENTS.md` 的目錄都要各放一份。
+1. **預設不放 `CLAUDE.md`。** 工作目錄及其上層都沒有 `CLAUDE.md`、`.claude/CLAUDE.md`、`CLAUDE.local.md` 時，Claude Code 直接讀 `AGENTS.md`（進子目錄時也讀巢狀 `AGENTS.md`），需 v2.1.277 以上。任何一份 `CLAUDE.md` 都讓它停讀，上層目錄（如容器目錄）的也算；`~/.claude/CLAUDE.md` 與 `.claude/rules/` 不算，照常載入（2026-11-17 對[官方文件](https://code.claude.com/docs/en/memory#agents-md)核對）。
+   - 個人覆寫放 `~/.claude/CLAUDE.md` 與 `.claude/settings.local.json`，不放 `CLAUDE.local.md`。
+   - 只有必須支援 v2.1.277 之前、或讀不到 `AGENTS.md` 的 session（例如停用內建外掛）時才放 `CLAUDE.md`：以 `@AGENTS.md` 開頭、其餘只放 Claude 專屬備註，每個有巢狀 `AGENTS.md` 的目錄各放一份。
 2. **Cursor 只用 `.cursor/rules/*.mdc`**，且僅在需要 Cursor 專屬範圍時；`.cursorrules` 是舊制。
 3. **`AGENTS.md` 是單一基準**：規則與技能用連結或引用它，不複製。
 4. **技能放 `.agents/skills/`**。Claude Code 只掃 `.claude/skills/`，所以逐一連結：`.claude/skills/<name>` → `../../.agents/skills/<name>`。連的是 `<name>` 項目，不是 `skills` 目錄本身（[官方文件](https://code.claude.com/docs/en/skills)只涵蓋技能項目的 symlink）；技能只存在 `.agents/skills/` 一份。
@@ -35,7 +37,7 @@ license: MIT
 
 ## 技能檢核
 
-- 目錄名 == frontmatter `name`；`description` 寫明做什麼 + 何時用，關鍵用途與觸發詞放前段（技能清單有字數預算，長描述會被截斷）。
+- 目錄名 == frontmatter `name`；`description` 寫明做什麼 + 何時用，關鍵用途與觸發詞放前段（規格上限 1,024 字；Claude Code 的技能清單把 `description` 與 `when_to_use` 合併後截在 1,536 字元，2026-11-17 對[技能文件](https://code.claude.com/docs/en/skills)核對）。
 - `SKILL.md` 控制在 500 行內；細節放 `references/`（只連一層，超過 100 行加目錄）、可執行的放 `scripts/`、範本放 `assets/`。
 - 腳本要能在 agent 的非互動 shell 執行：不開提示、有 `--help`、失敗時 stderr 說明原因、輸出長度可控（`--limit`）、需要解析時提供 `--json`。
 - 連結權威來源（`AGENTS.md`、官方文件），不複製會漂移的事實。
