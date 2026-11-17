@@ -13,7 +13,7 @@
 | [`structure-docs`](skills/structure-docs) | 以 Diátaxis 組織 `docs/` |
 | [`dsrm-technical-report`](skills/dsrm-technical-report) | 撰寫與審查 DSRM 技術報告 |
 | [`vault-doctor`](skills/vault-doctor) | 稽核與維護 Obsidian 知識庫之二層章節模板、斷鏈、孤兒筆記與 Frontmatter |
-| [`tech-deck`](skills/tech-deck) | 高密度技術提案、專題報告、工程架構與客戶說明簡報（PPTX）：語義色票、圖表與實際畫面截圖原語、零折行與白話命名 |
+| [`tech-deck`](skills/tech-deck) | 高密度技術提案、專題報告、工程架構與客戶說明簡報（PPTX）：語義色票、圖表與實際畫面截圖區塊、零折行與白話命名 |
 
 ## 結構
 

@@ -1,6 +1,6 @@
 # 簡報風格：配色、版面與寫法
 
-範本的實際值在 [`assets/deck-template/`](../assets/deck-template)（`tokens.toml`、`theme.py`、`deck_engine.py`）；本檔說明為什麼這樣用。字數上限與原語欄位見 [patterns.md](patterns.md)。
+範本的實際值在 [`assets/deck-template/`](../assets/deck-template)（分層見 [patterns.md](patterns.md)「引擎分層」）；本檔說明為什麼這樣用。字數上限與區塊欄位見 [patterns.md](patterns.md)。
 
 ## 版面骨架
 

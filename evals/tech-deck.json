@@ -5,7 +5,7 @@
       "id": "create-engineering-deck",
       "query": "請幫我用專業工程簡報風格（白底極簡、細線圓角、依語義配色）製作一份 16:9 的專題提案 PPTX。",
       "expected_behavior": [
-        "複製 assets/deck-template 的 tokens.toml、defaults.toml、theme.py、deck_engine.py、deck_spec.py、build_deck.py，內容只寫進 deck_spec.py",
+        "複製 assets/deck-template 的 引擎各檔與 tokens.toml、defaults.toml、deck_spec.py、build_deck.py，內容只寫進 deck_spec.py",
         "使用 16:9 版心、白底細線圓角與藍（資料與結構）、綠（系統確定）、琥珀（只給候選）、玫紅（須人判斷或失敗）的語義 kind，規格不寫色碼",
         "建置後執行 scripts/lint_wrap.py 與 scripts/lint_names.py，有違規就改寫文字並重跑",
         "逐頁轉 PDF 或圖片目視，通過後才回報完成"
@@ -26,9 +26,9 @@
       "id": "swimlane-flow-transparency",
       "query": "請在簡報中繪製三泳道流程圖，連接線上的標籤文字背景要透明，不要有一塊塊白底覆蓋。",
       "expected_behavior": [
-        "使用範本引擎既有的 swimlane（跨角色時序）原語，欄位寫在規格裡，不手動拖曳形狀",
+        "使用範本引擎既有的 swimlane（跨角色時序）區塊，欄位寫在規格裡，不手動拖曳形狀",
         "連線標籤文字框透明無填色，連線為直角折線；步驟的語義用 kind 表示，不寫色碼",
-        "若現有原語不夠，依 references/patterns.md 的擴充守則新增，簽章為 (slide, y, height, **欄位)，並在範本與測試補上示範與案例"
+        "若現有區塊不夠，依 references/patterns.md 的擴充守則新增，簽章為 (slide, y, **欄位, height=可用高度)，並在範本與測試補上示範與案例"
       ]
     },
     {
@@ -44,7 +44,7 @@
       "id": "screenshots-in-deck",
       "query": "客戶說明簡報要放系統的操作畫面，我手邊有一個示範環境，請把後台與入口各放幾頁。",
       "expected_behavior": [
-        "用 shots 原語放實際程式的截圖（示範資料），圖檔放消費端專案並以相對簡報目錄的路徑引用，不手繪示意",
+        "用 shots 區塊放實際程式的截圖（示範資料），圖檔放消費端專案並以相對簡報目錄的路徑引用，不手繪示意",
         "扁長版面用 crop 取畫面上緣，不另存裁好的圖；圖說用白話描述畫面",
         "某個狀態截不到時在頁面寫明，不補假圖",
         "建置後跑 lint_wrap.py 與 lint_names.py，並逐頁目視"

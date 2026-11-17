@@ -18,7 +18,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from deck_engine import build  # noqa: E402
+from deck_engine import render  # noqa: E402
 from deck_spec import SPEC  # noqa: E402
 
 
@@ -49,8 +49,9 @@ def main() -> int:
     ap.add_argument("out", nargs="?", default="deck.pptx", help="輸出的 .pptx（預設 deck.pptx）")
     ap.add_argument("--pdf", action="store_true", help="另以 PowerPoint 匯出同名 PDF（僅 macOS）")
     args = ap.parse_args()
-    pages = build(SPEC, args.out, HERE)
-    print(f"{args.out}（{pages} 頁）")
+    deck = render(SPEC, HERE)
+    deck.save(args.out)
+    print(f"{args.out}（{deck.n} 頁）")
     if args.pdf:
         pdf = Path(args.out).with_suffix(".pdf")
         if not export_pdf(Path(args.out), pdf):
