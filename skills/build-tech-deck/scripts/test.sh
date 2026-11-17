@@ -3,3 +3,4 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 uv run test_lint.py
+uv run test_template.py

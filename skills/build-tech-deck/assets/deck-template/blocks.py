@@ -587,6 +587,7 @@ def shots(
             ih = height - cap
             iw = ih / aspect
         pic = slide.shapes.add_picture(str(path), Inches(ix), Inches(y), Inches(iw), Inches(ih))
+        pic._element.nvPicPr.cNvPr.set("descr", f"{it['title']}：{it['body']}" if it.get("body") else it["title"])
         if aspect < full:
             pic.crop_bottom = 1.0 - aspect / full
             pic.height = Inches(ih)

@@ -9,13 +9,10 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+import deck_template
 import theme as T
-from _draw import line, text_box
 from blocks import BLOCKS, planned_height
 from lxml import etree
-from pptx import Presentation
-from pptx.enum.text import PP_ALIGN
-from pptx.util import Inches
 from qmd_export import SpecError, author_of
 
 L = T.LAYOUT
@@ -27,39 +24,45 @@ _OVERFLOW_TOLERANCE = 0.02  # 英吋（約 1.5 pt）：容許浮點與手調的�
 
 
 class Deck:
-    def __init__(self, short_title: str, assets: Path | None = None) -> None:
-        """`assets` 是簡報目錄：規格裡的圖片路徑相對於它（省略則用目前目錄）。"""
-        self.prs = Presentation()
-        self.prs.slide_width, self.prs.slide_height = Inches(L.slide_w), Inches(L.slide_h)
-        self.blank = self.prs.slide_layouts[6]
+    def __init__(self, short_title: str, assets: Path | None = None, template: str | Path | None = None) -> None:
+        """`assets` 是簡報目錄：規格裡的圖片路徑相對於它（省略則用目前目錄）。
+
+        `template` 是範本 `.pptx`（版面依名稱找，契約見 `deck_template.py`）；省略則由設計規格產生。
+        """
+        self.prs = deck_template.open_template(template)
         self.short = short_title
         self.assets = assets or Path.cwd()
         self.n = 0
 
-    def _new(self) -> Any:
+    def _new(self, layout: str) -> tuple[Any, Any]:
         self.n += 1
-        s = self.prs.slides.add_slide(self.blank)
-        s.background.fill.solid()
-        s.background.fill.fore_color.rgb = T.BG
+        layout_obj = deck_template.layout_named(self.prs, layout)
+        s = self.prs.slides.add_slide(layout_obj)
         s._element.append(etree.fromstring(_TRANSITION))
-        return s
+        return s, layout_obj
+
+    @staticmethod
+    def _fill(slide: Any, idx: int, text: str) -> None:
+        """把文字放進佔位符；字型、字級與顏色由版面決定。空字串就移除佔位符，免得編輯時留著提示字。"""
+        ph = slide.placeholders[idx]
+        if not text:
+            ph._element.getparent().remove(ph._element)
+            return
+        ph.text_frame.paragraphs[0].text = text
 
     def cover(self, title: str, subtitle: str, category: str, meta: str = "", notes: str = "") -> None:
-        s = self._new()
-        text_box(s, L.left, 0.6, 8, 0.3, category, size=T.TYPE.cover_category, color=T.ACCENT_TEXT, bold=True)
-        text_box(s, L.left, 2.3, L.width, 1.6, title, size=T.TYPE.cover_title, color=T.INK, bold=True, line_spacing=1.05)
-        line(s, L.left, 3.95, 1.5, color=T.ACCENT, weight=3)
-        text_box(s, L.left, 4.25, L.width, 0.5, subtitle, size=T.TYPE.cover_subtitle, color=T.GRAY)
-        line(s, L.left, 6.00, L.width)
-        if meta:
-            text_box(s, L.left, 6.15, L.width, 0.4, meta, size=T.TYPE.cover_meta, color=T.MUTED)
+        s, _ = self._new(deck_template.TITLE_SLIDE)
+        self._fill(s, deck_template.IDX_REF, category)
+        self._fill(s, deck_template.IDX_TITLE, title)
+        self._fill(s, deck_template.IDX_BODY, subtitle)
+        self._fill(s, deck_template.IDX_META, meta)
         if notes:
             s.notes_slide.notes_text_frame.text = notes
 
     def slide(self, ref: str, title: str, blocks: Sequence[tuple[str, dict[str, Any]]], notes: str = "") -> None:
-        s = self._new()
-        text_box(s, L.left, 0.46, 9.5, 0.25, ref, size=T.TYPE.slide_ref, color=T.ACCENT_TEXT, bold=True)
-        text_box(s, L.left, 0.70, L.width, 0.82, title, size=T.TYPE.slide_title, color=T.INK, bold=True, line_spacing=1.05)
+        s, layout = self._new(deck_template.TITLE_ONLY)
+        self._fill(s, deck_template.IDX_REF, ref)
+        self._fill(s, deck_template.IDX_TITLE, title)
         where = f"第 {self.n} 頁「{title}」"
         for kind, _ in blocks:
             if kind not in BLOCKS:
@@ -98,9 +101,7 @@ class Deck:
         for kind, kw in tail:
             BLOCKS[kind](s, L.bottom - L.note_h, **kw)
 
-        line(s, L.left, L.footer_rule, L.width)
-        text_box(s, L.left, L.footer_text, 8, 0.25, self.short, size=T.TYPE.footer, color=T.MUTED)
-        text_box(s, L.right - 1.0, L.footer_text, 1.0, 0.25, str(self.n), size=T.TYPE.footer, color=T.MUTED, align=PP_ALIGN.RIGHT)
+        deck_template.add_footer_placeholders(s, layout, self.short)  # 頁尾細線在母片；短名與頁碼是版面的佔位符
         if notes:
             s.notes_slide.notes_text_frame.text = notes
 
@@ -108,12 +109,17 @@ class Deck:
         self.prs.save(path)
 
 
-def render(spec: dict[str, Any], base_dir: Path | None = None) -> Deck:
-    """由規格產出簡報。`base_dir` 是簡報目錄：規格裡的圖片路徑相對於它。"""
-    d = Deck(spec["short_title"], Path(base_dir) if base_dir else None)
+def render(spec: dict[str, Any], base_dir: Path | None = None, template: str | Path | None = None) -> Deck:
+    """由規格產出簡報。`base_dir` 是簡報目錄：規格裡的圖片路徑相對於它；`template` 是範本 `.pptx`（省略則由設計規格產生）。"""
+    d = Deck(spec["short_title"], Path(base_dir) if base_dir else None, template)
     cover = dict(spec["cover"])
     cover.setdefault("meta", author_of(spec))  # 簡報封面不印日期
     d.cover(**cover)
     for ref, title, blocks, *extra in spec["slides"]:
         d.slide(ref, title, blocks, notes=extra[0] if extra else "")
+    props = d.prs.core_properties  # 檔案屬性：標題、作者、語言（螢幕閱讀器與檔案總管的搜尋用）
+    props.title = str(spec.get("title") or cover["title"]).replace("\n", " ")
+    props.author = author_of(spec)
+    props.keywords = ", ".join(spec.get("tags", []))
+    props.language = "zh-TW"
     return d

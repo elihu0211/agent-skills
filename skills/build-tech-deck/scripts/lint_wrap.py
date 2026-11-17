@@ -19,7 +19,9 @@ from pathlib import Path
 from pptx import Presentation
 from pptx.util import Emu
 
-DEFAULT_PT = 18.0     # run 沒指定字級時的預設
+A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+P = "{http://schemas.openxmlformats.org/presentationml/2006/main}"
+DEFAULT_PT = 18.0     # run 沒指定字級、也查不到繼承值時的預設
 ORPHAN_CHARS = 4      # 折行後最後一行 ≤ 此字數視為孤字
 
 
@@ -29,28 +31,70 @@ def char_em(ch: str) -> float:
     return 0.3 if ch == " " else 0.55
 
 
-def para_width_pt(par) -> tuple[float, float]:
-    """回傳 (段落估算寬度 pt, 代表字級 pt)。粗體多估 5%。"""
-    total, size = 0.0, DEFAULT_PT
+def inherited(shape) -> dict:
+    """佔位符沒在自己身上寫字級、粗體與內距時，沿用版面、再沿用母片：依序找 sz、b、lIns、rIns。
+
+    一般文字方塊沒有繼承來源，回傳空表（維持 run 自己的值與預設）。
+    """
+    if not getattr(shape, "is_placeholder", False):
+        return {}
+    chain = []
+    ph = shape
+    while ph is not None:
+        chain.append(ph)
+        ph = getattr(ph, "_base_placeholder", None)
+    found: dict = {}
+    for ph in chain:
+        el = ph._element
+        d = el.find(f"{P}txBody/{A}lstStyle/{A}lvl1pPr/{A}defRPr")
+        if d is not None:
+            for key, attr in (("size", "sz"), ("bold", "b")):
+                if key not in found and d.get(attr) is not None:
+                    found[key] = float(d.get(attr)) / 100 if attr == "sz" else d.get(attr) in ("1", "true")
+        body = el.find(f"{P}txBody/{A}bodyPr")
+        if body is not None:
+            for key, attr in (("lIns", "lIns"), ("rIns", "rIns")):
+                if key not in found and body.get(attr) is not None:
+                    found[key] = int(body.get(attr))
+    if "size" not in found or "bold" not in found:  # 母片的文字樣式：標題、內文與其他
+        kind = str(shape.placeholder_format.type)
+        style = "titleStyle" if "TITLE" in kind else "bodyStyle" if "BODY" in kind or "OBJECT" in kind or "SUBTITLE" in kind else "otherStyle"
+        master = shape.part.slide_layout.slide_master if hasattr(shape.part, "slide_layout") else None
+        d = master._element.find(f"{P}txStyles/{P}{style}/{A}lvl1pPr/{A}defRPr") if master is not None else None
+        if d is not None:
+            if "size" not in found and d.get("sz"):
+                found["size"] = float(d.get("sz")) / 100
+            if "bold" not in found and d.get("b") is not None:
+                found["bold"] = d.get("b") in ("1", "true")
+    return found
+
+
+def para_width_pt(par, inh: dict | None = None) -> tuple[float, float]:
+    """回傳 (段落估算寬度 pt, 代表字級 pt)。粗體多估 5%。run 沒寫的字級與粗體沿用 `inh`（佔位符的繼承值）。"""
+    inh = inh or {}
+    total, size = 0.0, inh.get("size", DEFAULT_PT)
     for run in par.runs:
         size = run.font.size.pt if run.font.size else size
         em = sum(char_em(c) for c in run.text) * size
-        total += em * (1.05 if run.font.bold else 1.0)
+        bold = run.font.bold if run.font.bold is not None else inh.get("bold", False)
+        total += em * (1.05 if bold else 1.0)
     return total, size
 
 
-def frame_width_pt(shape, frame) -> float:
-    left = frame.margin_left if frame.margin_left is not None else Emu(91440)
-    right = frame.margin_right if frame.margin_right is not None else Emu(91440)
+def frame_width_pt(shape, frame, inh: dict | None = None) -> float:
+    inh = inh or {}
+    body = frame._txBody.bodyPr  # frame.margin_* 在沒寫時回傳預設值，分不出「沒寫」與「寫了預設值」，直接看屬性
+    left = int(body.get("lIns")) if body.get("lIns") is not None else inh.get("lIns", 91440)
+    right = int(body.get("rIns")) if body.get("rIns") is not None else inh.get("rIns", 91440)
     return Emu(shape.width - left - right).pt
 
 
-def check_frame(slide_no, label, frame, avail_pt, slide_w_pt, left_pt, safety, wraps, out):
+def check_frame(slide_no, label, frame, avail_pt, slide_w_pt, left_pt, safety, wraps, out, inh=None):
     for par in frame.paragraphs:
         text = "".join(r.text for r in par.runs)
         if not text.strip():
             continue
-        width, size = para_width_pt(par)
+        width, size = para_width_pt(par, inh)
         if wraps:
             limit = avail_pt * safety
             if width > limit:
@@ -75,9 +119,10 @@ def lint(path: str, safety: float) -> list[dict]:
         for shape in slide.shapes:
             if shape.has_text_frame:
                 frame = shape.text_frame
-                avail = frame_width_pt(shape, frame)
+                inh = inherited(shape)
+                avail = frame_width_pt(shape, frame, inh)
                 check_frame(no, shape.name, frame, avail, slide_w_pt, Emu(shape.left).pt, safety,
-                            frame.word_wrap is not False, out)
+                            frame.word_wrap is not False, out, inh)
             elif shape.has_table:
                 for r, row in enumerate(shape.table.rows):
                     for c, cell in enumerate(row.cells):

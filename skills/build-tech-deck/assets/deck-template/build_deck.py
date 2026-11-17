@@ -48,8 +48,16 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("out", nargs="?", default="deck.pptx", help="輸出的 .pptx（預設 deck.pptx）")
     ap.add_argument("--pdf", action="store_true", help="另以 PowerPoint 匯出同名 PDF（僅 macOS）")
+    ap.add_argument("--template", type=Path, help="範本 .pptx（版面依名稱找，契約見 deck_template.py）；省略則由 tokens.toml 產生")
+    ap.add_argument("--emit-template", type=Path, metavar="PATH", help="匯出由 tokens.toml 產生的範本 .pptx 後結束；在 PowerPoint 的投影片母片檢視編輯，再以 --template 建置")
     args = ap.parse_args()
-    deck = render(SPEC, HERE)
+    if args.emit_template:
+        import deck_template
+
+        deck_template.new_presentation().save(str(args.emit_template))
+        print(args.emit_template)
+        return 0
+    deck = render(SPEC, HERE, args.template)
     deck.save(args.out)
     print(f"{args.out}（{deck.n} 頁）")
     if args.pdf:
