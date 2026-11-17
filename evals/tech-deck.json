@@ -3,11 +3,11 @@
   "cases": [
     {
       "id": "create-engineering-deck",
-      "query": "請幫我用專業工程簡報風格（白底極簡、直角細線、綠黑強調色）製作一份 16:9 的專題提案 PPTX。",
+      "query": "請幫我用專業工程簡報風格（白底極簡、細線圓角、依語義配色）製作一份 16:9 的專題提案 PPTX。",
       "expected_behavior": [
-        "複製 assets/deck-template 的 theme.py、deck_engine.py、deck_spec.py、build_deck.py，內容只寫進 deck_spec.py",
-        "使用 16:9 版心、白底極簡與墨黑／強調綠／警戒紅的語義色票",
-        "建置後執行 scripts/lint_wrap.py，有違規就改寫文字並重跑",
+        "複製 assets/deck-template 的 tokens.toml、theme.py、deck_engine.py、deck_spec.py、build_deck.py，內容只寫進 deck_spec.py",
+        "使用 16:9 版心、白底細線圓角與藍（資料與結構）、綠（系統確定）、琥珀（只給候選）、玫紅（須人判斷或失敗）的語義 kind，規格不寫色碼",
+        "建置後執行 scripts/lint_wrap.py 與 scripts/lint_names.py，有違規就改寫文字並重跑",
         "逐頁轉 PDF 或圖片目視，通過後才回報完成"
       ]
     },
@@ -16,7 +16,7 @@
       "query": "這張投影片換行太亂、字詞被腰斬，內容口語不夠聚焦，請幫我排版優化到滿分。",
       "expected_behavior": [
         "重構卡片內文為「四字粗體標籤：精煉說明」或單行精確短句",
-        "3 欄卡片每行控制在 14 字以內（含條列符號），消除末尾 3-4 字落單的孤字",
+        "依 references/patterns.md 的字數上限表控制每行字數（3 欄卡片每行 12 字內），消除末尾落單的孤字",
         "去除口語贅述，改成作業現象、數據與管理後果",
         "鋪陳與口語引導移入講稿備註，投影片只留骨架",
         "以 lint_wrap.py 確認沒有折行或孤字"
@@ -26,9 +26,9 @@
       "id": "swimlane-flow-transparency",
       "query": "請在簡報中繪製三泳道流程圖，連接線上的標籤文字背景要透明，不要有一塊塊白底覆蓋。",
       "expected_behavior": [
-        "知道範本引擎沒有流程圖原語，依 references/patterns.md 的擴充守則新增，簽章為 (slide, y, **欄位)",
-        "連線標籤文字框完全透明無填色，連線為直角折線",
-        "顏色與字型取自 theme.py，並在範本與測試補上對應的示範與案例"
+        "使用範本引擎既有的 swimlane（跨角色時序）原語，欄位寫在規格裡，不手動拖曳形狀",
+        "連線標籤文字框透明無填色，連線為直角折線；步驟的語義用 kind 表示，不寫色碼",
+        "若現有原語不夠，依 references/patterns.md 的擴充守則新增，簽章為 (slide, y, height, **欄位)，並在範本與測試補上示範與案例"
       ]
     },
     {
@@ -38,6 +38,25 @@
         "改寫該行文字（縮短或拆成標籤加說明），而不是縮小字級",
         "改 deck_spec.py 後重建並重跑 lint 直到通過",
         "說明 lint 以字寬估算，仍需轉 PDF 或圖片目視確認"
+      ]
+    },
+    {
+      "id": "screenshots-in-deck",
+      "query": "客戶說明簡報要放系統的操作畫面，我手邊有一個示範環境，請把後台與入口各放幾頁。",
+      "expected_behavior": [
+        "用 shots 原語放實際程式的截圖（示範資料），圖檔放消費端專案並以相對簡報目錄的路徑引用，不手繪示意",
+        "扁長版面用 crop 取畫面上緣，不另存裁好的圖；圖說用白話描述畫面",
+        "某個狀態截不到時在頁面寫明，不補假圖",
+        "建置後跑 lint_wrap.py 與 lint_names.py，並逐頁目視"
+      ]
+    },
+    {
+      "id": "no-code-names-on-slides",
+      "query": "這份簡報裡有 /portal、shared_buffers 和倉庫名稱，客戶看不懂，幫我改掉。",
+      "expected_behavior": [
+        "把投影片與講稿備註中的路徑、設定鍵、資料表欄位名、檔名與倉庫名稱改成白話的功能名稱",
+        "保留學術與標準名詞、通用工具名；維護者看的 README 不必改",
+        "以 lint_names.py（專案的倉庫與服務代號用 --deny）確認沒有殘留並重建"
       ]
     }
   ]

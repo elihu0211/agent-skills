@@ -72,7 +72,7 @@
     },
     {
       "name": "tech-deck",
-      "description": "High-density engineering keynote presentation layout and declarative PPTX generation",
+      "description": "High-density technical deck layout and declarative PPTX generation: semantic palette, diagram and real-screenshot blocks, no-wrap and plain-name lints",
       "source": "./",
       "strict": false,
       "skills": [
