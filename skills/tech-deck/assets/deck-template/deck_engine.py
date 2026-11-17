@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import re
+import tomllib
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -1066,14 +1067,15 @@ class Deck:
         s._element.append(trans)
         return s
 
-    def cover(self, title: str, subtitle: str, category: str, meta: str, notes: str = "") -> None:
+    def cover(self, title: str, subtitle: str, category: str, meta: str = "", notes: str = "") -> None:
         s = self._new()
         text_box(s, T.LM, 0.6, 8, 0.3, category, size=12, color=T.ACCENT_TEXT, bold=True)
         text_box(s, T.LM, 2.3, T.W, 1.6, title, size=40, color=T.INK, bold=True, line_spacing=1.05)
         line(s, T.LM, 3.95, 1.5, color=T.ACCENT, weight=3)
         text_box(s, T.LM, 4.25, T.W, 0.5, subtitle, size=19, color=T.GRAY)
         line(s, T.LM, 6.00, T.W, color=T.RULE, weight=0.75)
-        text_box(s, T.LM, 6.15, T.W, 0.4, meta, size=13.5, color=T.MUTED)
+        if meta:
+            text_box(s, T.LM, 6.15, T.W, 0.4, meta, size=13.5, color=T.MUTED)
         if notes:
             s.notes_slide.notes_text_frame.text = notes
 
@@ -1119,13 +1121,30 @@ class Deck:
         self.prs.save(path)
 
 
+DEFAULTS = Path(__file__).with_name("defaults.toml")
+
+
+def author_of(spec: dict[str, Any]) -> str:
+    """封面的作者：規格有寫就用規格的（空字串＝沒有），沒寫用 `defaults.toml`，連它也沒有就是沒有。"""
+    if "author" in spec:
+        value = spec["author"]
+    elif DEFAULTS.is_file():
+        with DEFAULTS.open("rb") as f:
+            value = tomllib.load(f).get("author", "")
+    else:
+        value = ""
+    if not isinstance(value, str):
+        raise ValueError(f"作者欄要是字串（空字串代表沒有）：{value!r}")
+    return value
+
+
 def render(spec: dict[str, Any], base_dir: Path | None = None) -> Deck:
     """由規格產出簡報。`base_dir` 是簡報目錄：規格裡的圖片路徑相對於它。"""
     global _ASSET_ROOT
     _ASSET_ROOT = Path(base_dir) if base_dir else None
     d = Deck(spec["short_title"])
     cover = dict(spec["cover"])
-    cover.setdefault("meta", spec["author"])  # 簡報封面不印日期
+    cover.setdefault("meta", author_of(spec))  # 簡報封面不印日期
     d.cover(**cover)
     for s_info in spec["slides"]:
         ref, title, blocks, *extra = s_info
