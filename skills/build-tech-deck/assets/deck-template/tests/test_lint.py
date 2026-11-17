@@ -138,6 +138,15 @@ def test_explicit_line_break_measures_each_line(build_spec: Build) -> None:
     assert {i["type"] for i in lint.lint_wrap(build_spec(spec))} == {"孤字"}
 
 
+def test_newline_characters_inside_a_run_are_line_breaks(build_spec: Build) -> None:
+    """表格儲存格與文字框常把 `\\n` 寫進 run 文字：各行分開估寬，加總當一行會把兩行都放得下的儲存格誤報成折行。"""
+    line = "字" * 30  # 一行放得下（約 400pt），兩行加總就超過儲存格寬度
+    two = {"rows": [["欄", "說明"], ["列", f"{line}\n{line}"]], "col_w": [2.0, 9.0]}
+    assert lint.lint_wrap(build_spec(one_slide([("table", two)]))) == []
+    one = {"rows": [["欄", "說明"], ["列", line + line]], "col_w": [2.0, 9.0]}
+    assert lint.lint_wrap(build_spec(one_slide([("table", one)]))) != []
+
+
 def test_a_line_that_is_still_too_long_after_the_break_is_flagged(build_spec: Build) -> None:
     spec = one_slide([("note", {"lines": ["x"]})])
     spec["title"] = "第一行很短\n" + "這一行寫得實在太長太長太長太長太長太長太長太長太長太長太長太長太長太長太長了"
