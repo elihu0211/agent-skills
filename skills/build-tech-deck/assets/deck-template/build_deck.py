@@ -32,7 +32,7 @@ def export_pdf(pptx: Path, pdf: Path) -> bool:
         close active presentation saving no
     end tell
     '''
-    lock = Path(tempfile.gettempdir()) / "tech-deck-powerpoint-export.lock"
+    lock = Path(tempfile.gettempdir()) / "build-tech-deck-powerpoint-export.lock"
     try:
         with open(lock, "w") as fh:
             fcntl.flock(fh, fcntl.LOCK_EX)

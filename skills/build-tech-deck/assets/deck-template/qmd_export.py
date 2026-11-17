@@ -92,7 +92,7 @@ def _one_line(value: str) -> str:
     return value.replace("\n", "")
 
 
-def _front_matter(spec: dict[str, Any], defaults: Mapping[str, Any] | None) -> str:
+def _front_matter(spec: dict[str, Any], name: str, defaults: Mapping[str, Any] | None) -> str:
     cover = spec["cover"]
     bad = [t for t in spec["tags"] if not _TAG.fullmatch(t)]
     if bad:
@@ -105,7 +105,7 @@ def _front_matter(spec: dict[str, Any], defaults: Mapping[str, Any] | None) -> s
         *([f"author: {_scalar(author)}"] if author else []),
         f"date: {_scalar(spec['date'])}",
         'type: "slides"',
-        f"output-file: {_scalar(spec['output_file'])}",
+        f"output-file: {_scalar(name)}",
         f"shorttitle: {_scalar(spec['short_title'])}",
         'category: "slides"',
         f"status: {_scalar(spec['status'])}",
@@ -235,9 +235,11 @@ def _block(kind: str, kw: dict[str, Any]) -> str:
     raise SpecError(f"簡報規格含未知區塊：{kind}")
 
 
-def export(spec: dict[str, Any], defaults: Mapping[str, Any] | None = None) -> str:
+def export(spec: dict[str, Any], name: str, defaults: Mapping[str, Any] | None = None) -> str:
     """回傳完整 `index.qmd` 文字。"""
-    out = [_front_matter(spec, defaults)]
+    if "output_file" in spec:
+        raise SpecError("規格不再有 output_file：產出檔名取自簡報目錄名（同 Quarto 的預設：檔名取自來源）")
+    out = [_front_matter(spec, name, defaults)]
     for _ref, title, blocks, *extra in spec["slides"]:
         out.append(f"## {title}\n")
         out += [_block(k, kw) + "\n" for k, kw in blocks]

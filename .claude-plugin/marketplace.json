@@ -71,12 +71,12 @@
       ]
     },
     {
-      "name": "tech-deck",
+      "name": "build-tech-deck",
       "description": "High-density technical deck layout and declarative PPTX generation: semantic palette, diagram and real-screenshot blocks, no-wrap and plain-name lints",
       "source": "./",
       "strict": false,
       "skills": [
-        "./skills/tech-deck"
+        "./skills/build-tech-deck"
       ]
     }
   ]
