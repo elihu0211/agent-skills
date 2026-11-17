@@ -1,5 +1,5 @@
 ---
-name: dsrm-technical-report
+name: write-dsrm-technical-report
 description: >-
   撰寫或審查以設計科學研究方法論（DSRM）組織的技術報告，包括取代學位論文的臺灣碩士技術報告
   （學位授予法 §7、認定準則 §10）。用於起草、重整或審查「關於已建成系統或產物」的報告，

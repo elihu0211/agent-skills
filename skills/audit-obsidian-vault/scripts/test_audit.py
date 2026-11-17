@@ -1,4 +1,4 @@
-"""doctor.py 回歸測試：python3 skills/vault-doctor/scripts/test_doctor.py（或 bash test.sh）"""
+"""audit.py 回歸測試：python3 skills/audit-obsidian-vault/scripts/test_audit.py（或 bash test.sh）"""
 
 import io
 import json
@@ -8,14 +8,14 @@ from contextlib import redirect_stdout
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from doctor import diagnose, parse_aliases, run_doctor, strip_code  # noqa: E402
+from audit import diagnose, parse_aliases, run_audit, strip_code  # noqa: E402
 
 FM = "---\ntype: moc\nupdated: 2026-01-01\ntags: [moc]\n---\n"
 
 
 def quiet(*args, **kwargs) -> int:
     with redirect_stdout(io.StringIO()):
-        return run_doctor(*args, **kwargs)
+        return run_audit(*args, **kwargs)
 
 
 def make_vault(root: Path, body: str) -> None:
@@ -125,7 +125,7 @@ def test_json_output_is_parseable_and_complete():
         make_vault(root, "[[壞一]] [[壞二]]\n")
         buf = io.StringIO()
         with redirect_stdout(buf):
-            code = run_doctor(root, as_json=True, limit=1)
+            code = run_audit(root, as_json=True, limit=1)
         data = json.loads(buf.getvalue())
         assert code == 1 and len(data["broken_links"]) == 2  # --json 不受 limit 截斷
 
@@ -136,7 +136,7 @@ def test_text_limit_reports_remaining():
         make_vault(root, " ".join(f"[[壞{i}]]" for i in range(5)))
         buf = io.StringIO()
         with redirect_stdout(buf):
-            run_doctor(root, limit=2)
+            run_audit(root, limit=2)
         assert "還有 3 筆" in buf.getvalue()
 
 

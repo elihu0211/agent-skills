@@ -227,7 +227,7 @@ def failed(r: dict, strict: bool) -> bool:
     return hard or (strict and soft)
 
 
-def run_doctor(vault_dir: Path, names: dict[str, str] | None = None, *, limit: int = 20, as_json: bool = False, strict: bool = False) -> int:
+def run_audit(vault_dir: Path, names: dict[str, str] | None = None, *, limit: int = 20, as_json: bool = False, strict: bool = False) -> int:
     report = diagnose(vault_dir, names)
     if as_json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
@@ -251,7 +251,7 @@ def main() -> None:
         print(f"找不到目錄：{root}", file=sys.stderr)
         sys.exit(2)
     names = {k: getattr(args, k) for k in DEFAULTS}
-    sys.exit(run_doctor(root, names, limit=args.limit, as_json=args.json, strict=args.strict))
+    sys.exit(run_audit(root, names, limit=args.limit, as_json=args.json, strict=args.strict))
 
 
 if __name__ == "__main__":
