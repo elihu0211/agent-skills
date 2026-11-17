@@ -1,5 +1,5 @@
-# 設計規格：色票、語義、幾何、字型的唯一真值源。簡報主題（theme.py）在匯入時讀它，不另外寫死色碼。
-# 若同一個專案還有別的輸出（例如 PDF 文件的 TikZ 圖），讓它們也由這份檔案推出，兩種媒介才會一致。
+# 設計規格的唯一真值源：色票、語義、幾何、字型。簡報主題（theme.py）在匯入時讀它；改色票改這裡，不改 theme.py。
+# 同專案另有 PDF 文件（如 TikZ 圖）要共用色票時，也讀這一份：`role.*.tikz` 與 `font.paper` 給那一邊用，簡報不讀。
 schema = 1
 
 # 色票：每個色族一組，main 是線與填滿，lite 是淡底，text 是白底上小字用的深色（對比 ≥ 4.5）。
@@ -34,7 +34,11 @@ main = "E11D48"
 lite = "FFE4E6"
 text = "BE123C"
 
-# 語義：節點顏色在所有輸出的意思一致。tikz 欄是同專案若有 TikZ 圖時對應的樣式名，簡報不使用。
+# 白：簡報的頁底與卡片填色，只有 main。
+[palette.white]
+main = "FFFFFF"
+
+# 語義：節點顏色在所有媒介的意思一致；`tikz` 是 TikZ 節點樣式名。
 [role.system]
 palette = "blue"
 meaning = "資料與結構"
@@ -60,13 +64,50 @@ palette = "slate"
 meaning = "中性、說明、預設"
 tikz = "box"
 
-# 幾何：線寬與圓角（pt）。
+# 幾何：兩種媒介共用的線寬與圓角。
 [geometry]
 radius_pt = 3
 hair_pt = 0.75
 normal_pt = 1.0
 strong_pt = 1.5
 
-# 字型：PPTX 只能引用檢視端已安裝的字型；macOS 用 PingFang TC，Windows 改 Microsoft JhengHei。
+# 簡報版面（英吋）：版心、區塊間距與頁尾。區塊內的局部尺寸（卡片內距、圖內間距）留在引擎，不在這裡。
+[deck.layout]
+slide_w = 13.333
+slide_h = 7.5
+left = 0.80          # 內容區左緣
+right = 12.53        # 內容區右緣（x 座標；寬度 = right - left）
+top = 1.70           # 內容區上緣，標題之下
+bottom = 6.85        # 內容區下緣，頁尾細線之上
+footer_rule = 7.00   # 頁尾細線的 y
+footer_text = 7.08   # 頁尾文字（簡報短名、頁碼）的 y
+note_h = 0.56        # 底部結論列的高度
+gap = 0.18           # 區塊與區塊之間
+side_w = 3.85        # 右側論證卡片欄的寬
+side_gap = 0.28      # 主圖與右側欄之間
+stack_gap = 0.16     # 疊放的卡片之間
+
+# 簡報字級（pt）：頁面框架與跨區塊共用的幾階；區塊內的局部字級留在引擎。
+[deck.type]
+cover_category = 12
+cover_title = 40
+cover_subtitle = 19
+cover_meta = 13.5
+slide_ref = 11
+slide_title = 25.5
+footer = 10.5
+note = 14.5
+panel_title = 14.0   # 右側論證卡片（arch_graph、bench_chart、shots 共用）
+panel_body = 11.8
+label = 10.0         # 連線標籤與序號徽章的小字
+
+# 字型：媒介不同，載體不同（PDF 文件的 Latin 與等寬字型內嵌；簡報 PPTX 只能引用檢視端已安裝的字型）。
+[font.paper]
+serif = "Source Serif 4"
+sans = "Source Sans 3"
+mono = "JetBrains Mono"
+cjk_serif = "Noto Serif CJK TC"
+cjk_sans = "Noto Sans CJK TC"
+
 [font.deck]
 cjk = "PingFang TC"

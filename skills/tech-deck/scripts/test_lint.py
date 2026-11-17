@@ -13,6 +13,7 @@ TEMPLATE = HERE.parent / "assets" / "deck-template"
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(TEMPLATE))
 
+import blocks  # noqa: E402
 import deck_engine  # noqa: E402
 import deck_spec  # noqa: E402
 import lint_names  # noqa: E402
@@ -22,7 +23,7 @@ import theme  # noqa: E402
 
 def build_spec(spec) -> str:
     out = str(Path(tempfile.mkdtemp()) / "t.pptx")
-    deck_engine.build(spec, out, TEMPLATE)
+    deck_engine.render(spec, TEMPLATE).save(out)
     return out
 
 
@@ -87,9 +88,9 @@ def test_sample_template_is_clean():
     assert lint_names.lint(str(path), [], set()) == []
 
 
-def test_every_primitive_is_exercised_by_sample():
+def test_every_block_is_exercised_by_sample():
     used = {kind for slide in deck_spec.SPEC["slides"] for kind, _ in slide[2]}
-    assert used == set(deck_engine.PRIMITIVES), f"範本沒涵蓋原語：{set(deck_engine.PRIMITIVES) - used}"
+    assert used == set(blocks.BLOCKS), f"範本沒涵蓋區塊：{set(blocks.BLOCKS) - used}"
 
 
 def test_every_card_kind_is_defined():
@@ -97,14 +98,14 @@ def test_every_card_kind_is_defined():
         assert kind in theme.CARDS, kind
 
 
-def test_theme_has_no_hardcoded_colors_but_white():
+def test_theme_has_no_hardcoded_colors():
     src = (TEMPLATE / "theme.py").read_text(encoding="utf-8")
-    assert re.findall(r'rgb\("([0-9A-Fa-f]{6})"\)', src) == ["FFFFFF"], "色票只在 tokens.toml 定義"
+    assert re.findall(r"""["']#?[0-9A-Fa-f]{6}["']""", src) == [], "色票只在 tokens.toml 定義"
 
 
 def test_roles_point_at_a_palette():
-    for name, role in theme.TOKENS["role"].items():
-        assert role["palette"] in theme.TOKENS["palette"], name
+    for name, role in theme.TOKENS.role.items():
+        assert role.palette in theme.TOKENS.palette, name
 
 
 def test_cards_are_rounded():
@@ -132,7 +133,7 @@ def test_table_semantic_cell_keeps_color():
     prs = Presentation(build_spec(spec))
     cell = next(s for s in prs.slides[1].shapes if s.has_table).table.cell(1, 1)
     run = cell.text_frame.paragraphs[0].runs[0]
-    assert run.font.color.rgb == theme.GREEN_TEXT and run.font.bold
+    assert run.font.color.rgb == theme.TONES["green"].text and run.font.bold
 
 
 # ---- lint_wrap ----

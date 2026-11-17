@@ -1,0 +1,327 @@
+"""繪製原語：文字、線、圓角卡片、徽章、膠囊與卡片疊放。圖表區塊（blocks.py）只呼叫這裡，不直接碰 python-pptx 的形狀細節。"""
+from __future__ import annotations
+
+import re
+from collections.abc import Sequence
+from typing import Any
+
+import theme as T
+from pptx.dml.color import RGBColor
+from pptx.enum.dml import MSO_LINE
+from pptx.enum.shapes import MSO_CONNECTOR, MSO_SHAPE
+from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
+from pptx.oxml.ns import qn
+from pptx.util import Inches, Pt
+from qmd_export import as_lines
+
+L = T.LAYOUT
+
+
+# ---- 文字 ----
+
+_BOLD = re.compile(r"\*\*(.+?)\*\*")
+_TITLE_TEXT = (T.ACCENT_TEXT, T.TONES["green"].text)  # 這兩種標題色的卡片裡，粗體改墨色
+
+
+def runs(par: Any, text: str, size: float, color: RGBColor, bold: bool = False, keep: bool = False) -> None:
+    """支援 **粗體** 標記解析：粗體文字凸顯，其餘保留指定色。"""
+    for i, part in enumerate(_BOLD.split(text)):
+        if not part:
+            continue
+        r = par.add_run()
+        r.text = part
+        r.font.name = T.FONT
+        r.font.size = Pt(size)
+        is_bold = bold or (i % 2 == 1)
+        r.font.bold = is_bold
+        if is_bold and not keep and color in _TITLE_TEXT:
+            r.font.color.rgb = T.INK  # 標題色卡片裡的粗體段落改墨色；keep=True（語義儲存格）保留語義色
+        elif is_bold and color == T.DARK_SUB:
+            r.font.color.rgb = T.WHITE
+        else:
+            r.font.color.rgb = color
+
+
+def text_box(
+    slide: Any,
+    x: float,
+    y: float,
+    w: float,
+    h: float,
+    paras: str | Sequence[str],
+    size: float = 14,
+    color: RGBColor = T.INK,
+    bold: bool = False,
+    align: PP_ALIGN = PP_ALIGN.LEFT,
+    anchor: MSO_ANCHOR = MSO_ANCHOR.TOP,
+    bullet: bool = False,
+    space: float = 4,
+    line_spacing: float = 1.15,
+) -> Any:
+    tb = slide.shapes.add_textbox(Inches(x), Inches(y), Inches(w), Inches(h))
+    tf = tb.text_frame
+    tf.word_wrap = True
+    tf.vertical_anchor = anchor
+    tf.margin_left = tf.margin_right = 0
+    tf.margin_top = tf.margin_bottom = 0
+    items = [paras] if isinstance(paras, str) else list(paras)
+    for i, t in enumerate(items):
+        p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
+        p.alignment = align
+        p.space_after = Pt(space if i < len(items) - 1 else 0)
+        p.line_spacing = line_spacing
+        runs(p, ("・" + t) if bullet else t, size, color, bold)
+    return tb
+
+
+# ---- 線 ----
+
+def seg(
+    slide: Any,
+    x1: float,
+    y1: float,
+    x2: float,
+    y2: float,
+    color: RGBColor = T.INK,
+    weight: float = T.LINE_STRONG,
+    dash: bool = False,
+    arrow: bool = True,
+) -> Any:
+    """繪製由 (x1, y1) 指向 (x2, y2) 的直線或箭頭連線。"""
+    c = slide.shapes.add_connector(MSO_CONNECTOR.STRAIGHT, Inches(x1), Inches(y1), Inches(x2), Inches(y2))
+    c.line.color.rgb = color
+    c.line.width = Pt(weight)
+    if dash:
+        c.line.dash_style = MSO_LINE.DASH
+    if arrow:
+        ln = c.line._get_or_add_ln()
+        for old in ln.findall(qn("a:tailEnd")):
+            ln.remove(old)
+        ln.append(ln.makeelement(qn("a:tailEnd"), {"type": "triangle", "w": "med", "len": "med"}))
+    return c
+
+
+def line(
+    slide: Any,
+    x: float,
+    y: float,
+    w: float,
+    color: RGBColor = T.RULE,
+    weight: float = T.LINE_HAIR,
+    vertical: bool = False,
+    h: float = 0.0,
+) -> Any:
+    """水平線（寬 w）；vertical=True 時是高 h 的垂直線。"""
+    return seg(slide, x, y, x + (0 if vertical else w), y + (h if vertical else 0), color=color, weight=weight, arrow=False)
+
+
+# ---- 形狀 ----
+
+def _shape(
+    slide: Any,
+    mso: Any,
+    x: float,
+    y: float,
+    w: float,
+    h: float,
+    fill: RGBColor | None,
+    line_color: RGBColor | None,
+    weight: float,
+) -> Any:
+    """帶填色與框線的形狀；fill 或 line_color 為 None 表示無填色或無框線。"""
+    sh = slide.shapes.add_shape(mso, Inches(x), Inches(y), Inches(w), Inches(h))
+    if fill is None:
+        sh.fill.background()
+    else:
+        sh.fill.solid()
+        sh.fill.fore_color.rgb = fill
+    if line_color is None:
+        sh.line.fill.background()
+    else:
+        sh.line.color.rgb = line_color
+        sh.line.width = Pt(weight)
+    sh.shadow.inherit = False
+    return sh
+
+
+def rect(
+    slide: Any,
+    x: float,
+    y: float,
+    w: float,
+    h: float,
+    fill: RGBColor | None = None,
+    line_color: RGBColor | None = None,
+    weight: float = T.LINE_NORMAL,
+) -> Any:
+    return _shape(slide, MSO_SHAPE.RECTANGLE, x, y, w, h, fill, line_color, weight)
+
+
+def _rounded(slide: Any, x: float, y: float, w: float, h: float, fill: RGBColor, line_color: RGBColor, weight: float) -> Any:
+    """圓角矩形：半徑取自設計規格（tokens.toml 的 geometry.radius_pt），與同專案 PDF 文件的 TikZ 節點一致。"""
+    sh = _shape(slide, MSO_SHAPE.ROUNDED_RECTANGLE, x, y, w, h, fill, line_color, weight)
+    sh.adjustments[0] = min(0.5, T.RADIUS_PT / 72.0 / max(0.01, min(w, h)))
+    return sh
+
+
+def badge(
+    slide: Any,
+    cx: float,
+    cy: float,
+    text: str,
+    fill: RGBColor = T.INK,
+    ink: RGBColor = T.WHITE,
+    line_color: RGBColor | None = None,
+    d: float = 0.28,
+    fs: float = 10.5,
+) -> Any:
+    """繪製圓形序號或狀態徽章（置中於 cx, cy）。"""
+    sh = _shape(slide, MSO_SHAPE.OVAL, cx - d / 2, cy - d / 2, d, d, fill, line_color or fill, T.LINE_NORMAL)
+    tf = sh.text_frame
+    tf.word_wrap = False
+    tf.vertical_anchor = MSO_ANCHOR.MIDDLE
+    tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
+    p = tf.paragraphs[0]
+    p.alignment = PP_ALIGN.CENTER
+    runs(p, text, fs, ink, bold=True)
+    return sh
+
+
+def pill(slide: Any, x: float, y: float, w: float, h: float, text: str, kind: str = "green_fill", fs: float = 11.5) -> Any:
+    """繪製膠囊狀態標籤。"""
+    spec = T.CARDS.get(kind, T.CARDS["gray"])
+    sh = _rounded(slide, x, y, w, h, spec.fill, spec.line, T.LINE_NORMAL)
+    tf = sh.text_frame
+    tf.word_wrap = False
+    tf.vertical_anchor = MSO_ANCHOR.MIDDLE
+    tf.margin_left = tf.margin_right = Inches(0.06)
+    tf.margin_top = tf.margin_bottom = 0
+    p = tf.paragraphs[0]
+    p.alignment = PP_ALIGN.CENTER
+    runs(p, text, fs, spec.head, bold=True)
+    return sh
+
+
+def card(
+    slide: Any,
+    x: float,
+    y: float,
+    w: float,
+    h: float,
+    kind: str,
+    title: str,
+    body: str | Sequence[str] | None = None,
+    tfs: float = 16.0,
+    bfs: float = 13.0,
+    bullet: bool = False,
+    valign: MSO_ANCHOR = MSO_ANCHOR.TOP,
+    pad_x: float = 0.13,
+    pad_y: float = 0.08,
+) -> Any:
+    """繪製單一語義卡片：圓角、細線、語義強調色。"""
+    spec = T.CARDS.get(kind, T.CARDS["gray"])
+    sh = _rounded(slide, x, y, w, h, spec.fill, spec.line, spec.weight)
+    tf = sh.text_frame
+    tf.word_wrap = True
+    tf.vertical_anchor = valign
+    tf.margin_left = tf.margin_right = Inches(pad_x)
+    tf.margin_top = tf.margin_bottom = Inches(pad_y)
+
+    items = as_lines(body)
+    if title:
+        p0 = tf.paragraphs[0]
+        p0.alignment = PP_ALIGN.LEFT
+        p0.space_after = Pt(3 if items else 0)
+        p0.line_spacing = 1.12
+        runs(p0, title, tfs, spec.head, bold=True)
+    for i, item in enumerate(items):
+        p = tf.paragraphs[0] if (i == 0 and not title) else tf.add_paragraph()
+        p.alignment = PP_ALIGN.LEFT
+        p.space_after = Pt(3 if i < len(items) - 1 else 0)
+        p.line_spacing = 1.14
+        runs(p, ("・" + item) if bullet else item, bfs, spec.ink, bold=False)
+    return sh
+
+
+# ---- 版面分割與疊放 ----
+
+def split(start: float, total: float, n: int, gap: float) -> list[tuple[float, float]]:
+    """把長度 total 等分成 n 格、格距 gap；回傳每格的（起點, 長度）。水平與垂直共用。"""
+    size = (total - gap * (n - 1)) / n
+    return [(start + i * (size + gap), size) for i in range(n)]
+
+
+def card_stack(
+    slide: Any,
+    x: float,
+    y: float,
+    w: float,
+    h: float,
+    items: Sequence[dict[str, Any]],
+    bullet: bool,
+    gap: float = L.stack_gap,
+) -> None:
+    """在 (x, y, w, h) 內垂直等分疊放語義卡片（右側論證欄）；item 的 kind、title、body、bullet 與規格同名。"""
+    for (ty, th), it in zip(split(y, h, len(items), gap), items, strict=True):
+        card(
+            slide, x, ty, w, th, it.get("kind", "gray"), it["title"], it.get("body"),
+            tfs=T.TYPE.panel_title, bfs=T.TYPE.panel_body, bullet=it.get("bullet", bullet),
+            valign=MSO_ANCHOR.MIDDLE, pad_x=0.12, pad_y=0.06,
+        )
+
+
+def edge_overlay(
+    slide: Any,
+    blocked: bool,
+    color: RGBColor,
+    mark: tuple[float, float],
+    label: str | None,
+    box: tuple[float, float, float, float],
+    **text_kw: Any,
+) -> None:
+    """連線上的附加物：阻斷邊中點的「✕」徽章，與邊標籤（box 是標籤的 x, y, w, h）。"""
+    if blocked:
+        badge(slide, *mark, "✕", fill=T.ALERT, ink=T.WHITE, d=0.22, fs=9.5)
+    if label:
+        text_box(slide, *box, label, size=T.TYPE.label, color=color, bold=True, **text_kw)
+
+
+# ---- 依 kind 取色 ----
+
+def kind_line(kind: str | None) -> RGBColor:
+    """語義 kind 的線色；其餘（含 dark）用墨色。"""
+    return T.TONES[kind].line if kind in T.TONES else T.INK
+
+
+def kind_head(kind: str | None) -> RGBColor:
+    """語義 kind 的白底小字色；其餘用墨色。"""
+    return T.TONES[kind].text if kind in T.TONES else T.INK
+
+
+def badge_fill(kind: str | None) -> RGBColor:
+    """序號徽章底色：語義卡片取線色，墨框與實心墨底用墨色（實心墨底上的徽章反白，否則數字隱形）。"""
+    if kind == "solid_dark":
+        return T.WHITE
+    base = (kind or "").removesuffix("_fill")
+    return T.TONES[base].line if base in T.TONES else T.INK
+
+
+def pill_kind(kind: str | None) -> str:
+    """徽章與時序膠囊的樣式：語義色用淡底，其餘用墨底。"""
+    base = (kind or "").removesuffix("_fill")
+    return f"{base}_fill" if base in T.TONES else "solid_dark"
+
+
+# ---- 表格儲存格框線 ----
+
+def cell_border(cell: Any, color: RGBColor = T.RULE, width: int = 6350) -> None:
+    """儲存格四邊細框線；框線元素須排在 tcPr 的最前面（填色之前）。"""
+    tc_pr = cell._tc.get_or_add_tcPr()
+    for i, tag in enumerate(("a:lnL", "a:lnR", "a:lnT", "a:lnB")):
+        for old in tc_pr.findall(qn(tag)):
+            tc_pr.remove(old)
+        ln = tc_pr.makeelement(qn(tag), {"w": str(width)})
+        solid = ln.makeelement(qn("a:solidFill"), {})
+        solid.append(solid.makeelement(qn("a:srgbClr"), {"val": str(color)}))
+        ln.append(solid)
+        tc_pr.insert(i, ln)
