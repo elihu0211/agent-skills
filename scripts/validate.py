@@ -21,6 +21,9 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 SKILLS = ROOT / "skills"
 MARKETPLACE = ROOT / ".claude-plugin" / "marketplace.json"
+README = ROOT / "README.md"
+README_SUMMARY_MAX = 80
+CATALOG_ROW = re.compile(r"^\| \[`([^`]+)`\]\(([^)]+)\) \| (.*) \|$", re.MULTILINE)
 
 # https://agentskills.io/specification
 NAME = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
@@ -156,11 +159,30 @@ def check_marketplace(names: set[str]) -> None:
         errors.append(f"marketplace: 技能 {missing!r} 沒有列在任何 plugin")
 
 
+def check_readme_catalog(names: set[str]) -> None:
+    """README 的技能表是跨技能的唯一總覽：每個技能一行、連結指向它的目錄、簡述只有一句。
+
+    細節只在各技能的 SKILL.md 與 references/；這裡再寫長就會與它們各自漂移。
+    """
+    rows = CATALOG_ROW.findall(README.read_text(encoding="utf-8"))
+    listed = {name for name, _, _ in rows}
+    for missing in sorted(names - listed):
+        errors.append(f"README.md: 技能表缺少 {missing!r}")
+    for extra in sorted(listed - names):
+        errors.append(f"README.md: 技能表列出不存在的技能 {extra!r}")
+    for name, link, summary in rows:
+        if link != f"skills/{name}":
+            errors.append(f"README.md: {name!r} 的連結應是 skills/{name}，現為 {link}")
+        if len(summary) > README_SUMMARY_MAX:
+            warnings.append(f"README.md: {name!r} 的簡述有 {len(summary)} 字，超過 {README_SUMMARY_MAX}；細節放 SKILL.md")
+
+
 def main() -> int:
     skills = sorted(p for p in SKILLS.iterdir() if p.is_dir())
     for skill in skills:
         check_skill(skill)
     check_marketplace({p.name for p in skills})
+    check_readme_catalog({p.name for p in skills})
     for w in warnings:
         print(f"警告：{w}")
     for e in errors:
