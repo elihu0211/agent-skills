@@ -1,0 +1,72 @@
+# 設計規格：色票、語義、幾何、字型的唯一真值源。簡報主題（theme.py）在匯入時讀它，不另外寫死色碼。
+# 若同一個專案還有別的輸出（例如 PDF 文件的 TikZ 圖），讓它們也由這份檔案推出，兩種媒介才會一致。
+schema = 1
+
+# 色票：每個色族一組，main 是線與填滿，lite 是淡底，text 是白底上小字用的深色（對比 ≥ 4.5）。
+# slate 另有 mute（頁尾與次要字）、rule（分隔細線）、wash（交錯列底）。
+[palette.ink]
+main = "1E293B"
+
+[palette.slate]
+main = "475569"
+lite = "F1F5F9"
+mute = "64748B"
+rule = "E2E8F0"
+wash = "F8FAFC"
+
+[palette.blue]
+main = "2563EB"
+lite = "DBEAFE"
+text = "1D4ED8"
+
+[palette.green]
+main = "059669"
+lite = "D1FAE5"
+text = "047857"
+
+[palette.amber]
+main = "D97706"
+lite = "FEF3C7"
+text = "B45309"
+
+[palette.rose]
+main = "E11D48"
+lite = "FFE4E6"
+text = "BE123C"
+
+# 語義：節點顏色在所有輸出的意思一致。tikz 欄是同專案若有 TikZ 圖時對應的樣式名，簡報不使用。
+[role.system]
+palette = "blue"
+meaning = "資料與結構"
+tikz = "box-system"
+
+[role.certain]
+palette = "green"
+meaning = "系統確定者"
+tikz = "box-internal"
+
+[role.candidate]
+palette = "amber"
+meaning = "只給候選者"
+tikz = "box-external"
+
+[role.warn]
+palette = "rose"
+meaning = "須人判斷或失敗者"
+tikz = "box-warn"
+
+[role.neutral]
+palette = "slate"
+meaning = "中性、說明、預設"
+tikz = "box"
+
+# 幾何：線寬與圓角（pt）。
+[geometry]
+radius_pt = 3
+hair_pt = 0.75
+normal_pt = 1.0
+strong_pt = 1.5
+
+# 字型：PPTX 只能引用檢視端已安裝的字型；macOS 用 PingFang TC，Windows 改 Microsoft JhengHei。
+[font.deck]
+cjk = "PingFang TC"
