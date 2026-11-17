@@ -1,0 +1,7 @@
+# Quarto 專案設定（專案根）：作者與單位寫在這裡一次，Quarto 文件與簡報（deckstyle）都讀它。
+# 這份只示範簡報會讀的鍵；專案已有 _quarto.yml 就把 author 併進去。
+# 往下可在子目錄放 `_metadata.yml` 補充（目錄層），deck.yml 的同名鍵最後合併；
+# 物件逐鍵合併、陣列串接、純量由較近的一層覆蓋。用 `uv run deckstyle inspect <簡報目錄>` 看合併結果。
+author:
+  - name: 範例作者
+    affiliation: 範例單位

@@ -5,10 +5,10 @@
       "id": "create-engineering-deck",
       "query": "請幫我用專業工程簡報風格（白底極簡、細線圓角、依語義配色）製作一份 16:9 的專題提案 PPTX。",
       "expected_behavior": [
-        "複製 assets/deck-template 的 引擎各檔與 tokens.toml、defaults.toml、deck_spec.py、build_deck.py，內容只寫進 deck_spec.py",
-        "使用 16:9 版心、白底細線圓角與藍（資料與結構）、綠（系統確定）、琥珀（只給候選）、玫紅（須人判斷或失敗）的語義 kind，規格不寫色碼",
-        "建置後執行 scripts/lint_wrap.py 與 scripts/lint_names.py，有違規就改寫文字並重跑",
-        "逐頁轉 PDF 或圖片目視，通過後才回報完成"
+        "複製 assets/deck-template 到專案（引擎、_brand.yml、_quarto.yml），品牌與作者放專案根，內容只寫進 deck.yml",
+        "用 deckstyle new 建立簡報目錄，使用 16:9 版心、白底細線圓角與藍（資料與結構）、綠（系統確定）、琥珀（只給候選）、玫紅（須人判斷或失敗）的語義 kind，規格不寫色碼",
+        "用 deckstyle build 建置（先驗證規格再自動跑零折行與白話命名檢查），有違規就改寫文字並重跑",
+        "逐頁轉 PDF 或圖片目視（deckstyle preview），通過後才回報完成"
       ]
     },
     {
@@ -18,17 +18,17 @@
         "重構卡片內文為「四字粗體標籤：精煉說明」或單行精確短句",
         "依 references/patterns.md 的字數上限表控制每行字數（3 欄卡片每行 12 字內），消除末尾落單的孤字",
         "去除口語贅述，改成作業現象、數據與管理後果",
-        "鋪陳與口語引導移入講稿備註，投影片只留骨架",
-        "以 lint_wrap.py 確認沒有折行或孤字"
+        "鋪陳與口語引導移入講稿備註（每頁的 notes），投影片只留骨架",
+        "以 scripts/lint.py 或 deckstyle build 的內建檢查確認沒有折行或孤字"
       ]
     },
     {
       "id": "swimlane-flow-transparency",
       "query": "請在簡報中繪製三泳道流程圖，連接線上的標籤文字背景要透明，不要有一塊塊白底覆蓋。",
       "expected_behavior": [
-        "使用範本引擎既有的 swimlane（跨角色時序）區塊，欄位寫在規格裡，不手動拖曳形狀",
+        "使用範本引擎既有的 swimlane（跨角色時序）區塊，欄位寫在 deck.yml，不手動拖曳形狀",
         "連線標籤文字框透明無填色，連線為直角折線；步驟的語義用 kind 表示，不寫色碼",
-        "若現有區塊不夠，依 references/patterns.md 的擴充守則新增，簽章為 (slide, y, **欄位, height=可用高度)，並在範本與測試補上示範與案例"
+        "若現有區塊不夠，依 references/patterns.md 的擴充守則新增，簽章為 (t, slide, y, height=可用高度, **欄位)，並同步 spec.py、schema.py、outline.py 與範例 deck.yml"
       ]
     },
     {
@@ -36,7 +36,7 @@
       "query": "lint_wrap.py 回報第 3 頁有「孤字」，這個 deck 要怎麼修？",
       "expected_behavior": [
         "改寫該行文字（縮短或拆成標籤加說明），而不是縮小字級",
-        "改 deck_spec.py 後重建並重跑 lint 直到通過",
+        "改 deck.yml 後重建並重跑 lint 直到通過",
         "說明 lint 以字寬估算，仍需轉 PDF 或圖片目視確認"
       ]
     },
@@ -45,9 +45,9 @@
       "query": "客戶說明簡報要放系統的操作畫面，我手邊有一個示範環境，請把後台與入口各放幾頁。",
       "expected_behavior": [
         "用 shots 區塊放實際程式的截圖（示範資料），圖檔放消費端專案並以相對簡報目錄的路徑引用，不手繪示意",
-        "扁長版面用 crop 取畫面上緣，不另存裁好的圖；圖說用白話描述畫面",
+        "扁長版面用 crop 取畫面上緣，不另存裁好的圖；圖說用白話描述畫面，必要時用 alt 寫替代文字",
         "某個狀態截不到時在頁面寫明，不補假圖",
-        "建置後跑 lint_wrap.py 與 lint_names.py，並逐頁目視"
+        "建置後確認零折行與白話命名檢查通過，並逐頁目視"
       ]
     },
     {
@@ -56,7 +56,26 @@
       "expected_behavior": [
         "把投影片與講稿備註中的路徑、設定鍵、資料表欄位名、檔名與倉庫名稱改成白話的功能名稱",
         "保留學術與標準名詞、通用工具名；維護者看的 README 不必改",
-        "以 lint_names.py（專案的倉庫與服務代號用 --deny）確認沒有殘留並重建"
+        "以 scripts/lint.py（專案的倉庫與服務代號寫進 lint.deny 或用 --deny）確認沒有殘留並重建"
+      ]
+    },
+    {
+      "id": "change-brand-and-author",
+      "query": "簡報的顏色要換成我們公司的品牌色，作者欄要改成三位組員，封面印出單位與姓名。",
+      "expected_behavior": [
+        "品牌色與字型改專案根的 _brand.yml（色票與語義色，保留引擎約定的色票名稱），不在 deck.yml 寫色碼",
+        "作者改專案根的 _quarto.yml 或該目錄的 _metadata.yml，用 name 加 affiliation 的結構；陣列串接，不在每份 deck.yml 重抄",
+        "用 deckstyle inspect 確認合併後的作者與來源檔，封面印「單位 姓名」",
+        "重建後逐頁目視確認配色一致"
+      ]
+    },
+    {
+      "id": "spec-error-points-at-page",
+      "query": "deckstyle build 報「第 4 頁「系統架構」的 arch-graph 區塊：…」，我是不是哪個欄位寫錯了？",
+      "expected_behavior": [
+        "依訊息指出的頁碼與區塊檢查 deck.yml 的欄位名稱（kebab-case）、必填欄位與 kind 名稱，不改引擎程式碼",
+        "可用 deckstyle schema spec 產生 JSON Schema 讓編輯器即時驗證",
+        "修正後重新建置，確認通過規格驗證與 lint"
       ]
     }
   ]

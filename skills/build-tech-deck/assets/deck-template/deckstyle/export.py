@@ -1,0 +1,75 @@
+"""匯出 PDF：以 macOS 的 Microsoft PowerPoint 把 `.pptx` 轉成向量 PDF（內嵌字型，與投影所見一致）。
+
+PowerPoint 開檔再另存是唯一能忠實呈現 PingFang TC 與圓角形狀的路徑；沒有 PowerPoint 的環境只能出 `.pptx`。
+匯出失敗或逾時以 `ExportError` 停下，不是警告後繼續。多個行程同時匯出時以檔案鎖串行，不會互相關掉對方的文件。
+"""
+
+from __future__ import annotations
+
+import fcntl
+import subprocess
+import tempfile
+from pathlib import Path
+
+EXPORT_TIMEOUT_S = 180  # 整個 AppleScript 的上限；PowerPoint 開檔的輪詢上限（20 秒）在腳本內
+
+# 路徑與檔名以 argv 傳入，不拼進腳本字串（路徑含引號或空白也安全）。只關自己開的那份：
+# 以檔名取得 presentation，使用者已開著的其他簡報不受影響。
+_SCRIPT = """
+on run argv
+    set pptxFile to POSIX file (item 1 of argv)
+    set pdfFile to POSIX file (item 2 of argv)
+    set deckName to item 3 of argv
+    tell application "Microsoft PowerPoint"
+        open pptxFile
+        repeat 40 times
+            if exists presentation deckName then exit repeat
+            delay 0.5
+        end repeat
+        if not (exists presentation deckName) then error "PowerPoint 20 秒內沒有開啟 " & deckName
+        set deck to presentation deckName
+        try
+            save deck in pdfFile as save as PDF
+        on error msg
+            close deck saving no
+            error msg
+        end try
+        close deck saving no
+    end tell
+end run
+"""
+
+
+class ExportError(RuntimeError):
+    """PDF 匯出失敗；訊息說明原因與處置。"""
+
+
+def export_pdf(pptx: Path, pdf: Path) -> None:
+    """用 PowerPoint 匯出向量 PDF；失敗丟 `ExportError`。"""
+    pdf.unlink(missing_ok=True)
+    argv = [str(pptx.resolve()), str(pdf.resolve()), pptx.name]
+    lock = Path(tempfile.gettempdir()) / "deckstyle-powerpoint-export.lock"
+    try:
+        with lock.open("w") as fh:
+            fcntl.flock(fh, fcntl.LOCK_EX)
+            run = subprocess.run(
+                ["osascript", "-", *argv],
+                input=_SCRIPT,
+                capture_output=True,
+                text=True,
+                timeout=EXPORT_TIMEOUT_S,
+                check=False,
+            )
+    except FileNotFoundError:
+        raise ExportError("PowerPoint 匯出 PDF 需要 macOS 的 osascript；沒有的環境只出 .pptx（不加 --pdf）。") from None
+    except subprocess.TimeoutExpired:
+        raise ExportError(
+            f"PowerPoint 匯出 {pptx.name} 逾時（{EXPORT_TIMEOUT_S} 秒）：確認 PowerPoint 沒有卡在對話框，"
+            "並關掉它殘留開著的這份簡報後重試。"
+        ) from None
+    if run.returncode != 0:
+        raise ExportError(
+            f"PowerPoint 匯出 {pptx.name} 失敗（osascript 結束碼 {run.returncode}）：{run.stderr.strip()}"
+        )
+    if not pdf.is_file() or pdf.stat().st_size == 0:
+        raise ExportError(f"PowerPoint 回報成功，但沒有產出 {pdf}。")
