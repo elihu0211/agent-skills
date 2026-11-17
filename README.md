@@ -32,7 +32,18 @@ ci/skills-update.gitlab-ci.yml      GitLab 消費端用的 CI 範本
 
 ## 安裝
 
-### 專案
+單人單機先裝全域；只有團隊共用或雲端 session 才裝進專案。Claude Code 的個人技能（`~/.claude/skills/`）對本機所有專案生效，同名時蓋過專案層；雲端 session 讀不到它，只讀專案層（[技能文件](https://code.claude.com/docs/en/skills)，2026-11-17 核對）。
+
+### 全域（單人單機）
+
+```bash
+DISABLE_TELEMETRY=1 npx skills add elihu0211/agent-skills --skill <name> -g -a codex -y   # 裝到 ~/.agents/skills，來源與雜湊記在 ~/.agents/.skill-lock.json
+DISABLE_TELEMETRY=1 npx skills update -g -y                                              # 更新
+```
+
+Claude Code 讀 `~/.claude/skills/`，讓它指向 `~/.agents/skills`（符號連結）就不必另外複製；不要手動複製技能目錄，鎖定檔不認得，更新時會被當成未追蹤。
+
+### 專案（團隊或雲端）
 
 用 [`skills` CLI](https://github.com/vercel-labs/skills) 安裝；它寫入 `.agents/skills/<name>/`，並把來源與內容雜湊釘在 `skills-lock.json`：
 
