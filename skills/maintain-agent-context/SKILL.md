@@ -21,7 +21,7 @@ license: MIT
 2. **Cursor 只用 `.cursor/rules/*.mdc`**，且僅在需要 Cursor 專屬範圍時；`.cursorrules` 是舊制。
 3. **`AGENTS.md` 是單一基準**：規則與技能用連結或引用它，不複製。
 4. **技能放 `.agents/skills/`**。Claude Code 只掃 `.claude/skills/`，所以逐一連結：`.claude/skills/<name>` → `../../.agents/skills/<name>`。連的是 `<name>` 項目，不是 `skills` 目錄本身（[官方文件](https://code.claude.com/docs/en/skills)只涵蓋技能項目的 symlink）；技能只存在 `.agents/skills/` 一份。
-5. **共用技能是「安裝」的**：列在 `skills-lock.json` 的技能，來源由其 `source` 欄位指定。要改就去來源改；消費端 repo 透過排程的 skills-update pipeline（或手動 `npx skills update -p -y`）取得變更。
+5. **共用技能預設全域安裝**：單人單機用 `npx skills add <來源> --skill <name> -g -a codex -y` 裝到 `~/.agents/skills`，以 `npx skills update -g -y` 更新；個人技能對本機所有專案生效、同名時蓋過專案層，專案層不放副本。只有團隊共用或雲端 session（讀不到 `~/.claude/skills/`）才裝進專案：技能列在 `skills-lock.json`，來源由其 `source` 欄位指定，要改就去來源改，經排程的 skills-update pipeline（或手動 `npx skills update -p -y`）取得變更。
 6. **合併技能更新前審 diff**：技能以 agent 的完整權限執行；更新 pipeline 只開合併請求，不推到預設分支。
 
 ## 內容該放哪裡
