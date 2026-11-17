@@ -113,6 +113,9 @@ def check_skill(skill: Path) -> None:
         warnings.append(f"{rel}: SKILL.md 本文超過 {BODY_LINES_MAX} 行；請把細節移到 references/")
 
     for md in skill.rglob("*.md"):
+        # 本機的 .venv、快取不是技能內容（CI 沒有，本機跑過測試就有）
+        if any(part.startswith(".") for part in md.relative_to(skill).parts):
+            continue
         for target in LINK.findall(md.read_text(encoding="utf-8")):
             path = target.split("#", 1)[0]
             if path and not (md.parent / path).exists():
