@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import BRAND_FILE, QUARTO_FILE, write
+from conftest import QUARTO_FILE, write
 
 from deckstyle import config
 from deckstyle.spec import SpecError

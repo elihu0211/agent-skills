@@ -7,6 +7,9 @@ TEMPLATE=assets/deck-template
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
+# 靜態檢查：lint、格式與型別，引擎程式碼不退化
+(cd "$TEMPLATE" && uvx ruff check . && uvx ruff format --check . && uv run --isolated --with pyright pyright deckstyle)
+
 (cd "$TEMPLATE" && uv run --isolated --with pytest --with jsonschema pytest -q)
 
 # 假專案：.git 標出專案根，帶範本附的品牌與作者設定
