@@ -16,6 +16,7 @@ sys.path.insert(0, str(TEMPLATE))
 import blocks  # noqa: E402
 import deck_engine  # noqa: E402
 import deck_spec  # noqa: E402
+import qmd_export  # noqa: E402
 import lint_names  # noqa: E402
 import lint_wrap  # noqa: E402
 import theme  # noqa: E402
@@ -80,6 +81,22 @@ def test_non_string_author_stops_the_build():
         assert "字串" in str(e)
     else:
         raise AssertionError("非字串的作者欄應該停下")
+
+
+EXPORT_META = {"date": "2026-01-01", "version": "1", "status": "active", "tags": ["slides"]}  # index.qmd 的 front matter 要這幾欄
+
+
+def test_export_names_the_output_after_the_deck_directory():
+    assert 'output-file: "demo-deck"' in qmd_export.export({**deck_spec.SPEC, **EXPORT_META}, "demo-deck")
+
+
+def test_a_leftover_output_file_key_is_rejected():
+    try:
+        qmd_export.export({**deck_spec.SPEC, **EXPORT_META, "output_file": "x"}, "demo-deck")
+    except qmd_export.SpecError as e:
+        assert "output_file" in str(e)
+    else:
+        raise AssertionError("規格殘留 output_file 應該報錯")
 
 
 def test_sample_template_is_clean():
