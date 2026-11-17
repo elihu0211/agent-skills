@@ -1,0 +1,43 @@
+# 品牌（Quarto 官方 brand.yml）：簡報引擎與 Quarto 文件共讀的唯一真值，色票與字型只在這裡改。複製到專案根（含 .git 的目錄）後改色與字型。
+# 引擎對色票名稱有約定（缺了簡報畫不出來，載入時就擋）：見引擎的 deckstyle/brand.py。
+meta:
+  name: "example-brand"
+color:
+  palette:
+    ink: "#1E293B"
+    slate: "#475569"
+    slate-lite: "#F1F5F9"
+    slate-mute: "#64748B"
+    slate-rule: "#E2E8F0"
+    slate-wash: "#F8FAFC"
+    blue: "#2563EB"
+    blue-lite: "#DBEAFE"
+    blue-text: "#1D4ED8"
+    green: "#059669"
+    green-lite: "#D1FAE5"
+    green-text: "#047857"
+    amber: "#D97706"
+    amber-lite: "#FEF3C7"
+    amber-text: "#B45309"
+    rose: "#E11D48"
+    rose-lite: "#FFE4E6"
+    rose-text: "#BE123C"
+    white: "#FFFFFF"
+  foreground: ink
+  background: white
+  primary: blue
+  secondary: slate
+  tertiary: slate-lite
+  success: green
+  info: slate-mute
+  warning: amber
+  danger: rose
+  light: slate-wash
+  dark: ink
+  link: blue-text
+typography:
+  fonts:
+    - family: "PingFang TC"
+      source: system
+  base: "PingFang TC"
+  headings: "PingFang TC"

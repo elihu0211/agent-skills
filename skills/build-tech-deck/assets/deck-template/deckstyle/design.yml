@@ -1,0 +1,94 @@
+# 簡報引擎的設計參數：版面、字級、區塊高度上限、頁框幾何、轉場、頁尾與 lint 門檻。
+# 顏色與字型不在這裡：它們來自 Quarto 官方的 _brand.yml（brand.py 讀取），這裡只管版面。
+# 改這裡就改全部簡報；`uv run deckstyle theme` 驗證，改完重建要交付的簡報。
+schema: 1
+
+# 幾何：圓角與線寬（pt）。投影要較粗，所以線寬取 0.75／1.0／1.5。
+geometry:
+  radius-pt: 3
+  hair-pt: 0.75
+  normal-pt: 1.0
+  strong-pt: 1.5
+
+# 版面（英吋）：版心、區塊間距與頁尾。區塊內的局部尺寸（卡片內距、圖內間距）留在引擎。
+layout:
+  slide-w: 13.333
+  slide-h: 7.5
+  left: 0.80          # 內容區左緣
+  right: 12.53        # 內容區右緣（x 座標；寬度 = right - left）
+  top: 1.70           # 內容區上緣，標題之下
+  bottom: 6.85        # 內容區下緣，頁尾細線之上
+  footer-rule: 7.00   # 頁尾細線的 y
+  footer-text: 7.08   # 頁尾文字（簡報短名、頁碼）的 y
+  note-h: 0.56        # 底部結論列的高度
+  gap: 0.18           # 區塊與區塊之間
+  side-w: 3.85        # 右側論證卡片欄的寬
+  side-gap: 0.28      # 主圖與右側欄之間
+  stack-gap: 0.16     # 疊放的卡片之間
+
+# 頁框幾何（英吋）：各種頁面的標題、標籤與裝飾線位置。
+frame:
+  ref-y: 0.46              # 內容頁章節標籤
+  title-y: 0.70            # 內容頁標題
+  title-h: 0.82
+  cover-category-y: 0.6    # 封面類別
+  cover-title-y: 2.3
+  cover-title-h: 1.6
+  accent-y: 3.95           # 主色細線（封面、分隔頁、結語頁）
+  accent-w: 1.5
+  accent-weight-pt: 3
+  cover-subtitle-y: 4.25
+  cover-subtitle-h: 0.5
+  meta-rule-y: 6.0         # 封面與結語頁底部細線
+  meta-y: 6.15
+  meta-h: 0.4
+  divider-ref-y: 2.2
+  divider-title-y: 2.65
+  divider-title-h: 1.2
+  divider-sub-y: 4.2
+  divider-sub-h: 0.8
+  closing-title-y: 2.5
+  closing-title-h: 1.4
+  closing-sub-h: 0.8
+
+# 字級（pt）：頁面框架與跨區塊共用的幾階；區塊內的局部字級留在引擎。
+type:
+  cover-category: 12
+  cover-title: 40
+  cover-subtitle: 19
+  cover-meta: 13.5
+  divider-title: 34
+  divider-sub: 18
+  closing-title: 40
+  slide-ref: 11
+  slide-title: 25.5
+  footer: 10.5
+  note: 14.5
+  panel-title: 14.0   # 右側論證卡片（arch_graph、bench_chart、shots、chart 共用）
+  panel-body: 11.8
+  label: 10.0         # 連線標籤與序號徽章的小字
+  kpi-value: 40       # kpi 區塊的大數字
+  body: 18            # 範本「標題與內容」版面的內文第一層；往下每層遞減
+
+# 區塊高度上限（英吋）：單一區塊再怎麼有空間也不畫得比這高，避免卡片被拉成大方塊。
+limits:
+  card-max-h: 4.20
+  row-max-h: 1.20
+  steps-max-h: 3.20
+  columns-max-h: 3.00
+  kpi-max-h: 2.20
+  chart-max-h: 4.35
+  flow-max-h: 2.20
+  caption-h: 0.30     # flow 的圖說列
+
+# 頁面行為。transition：fade 或 none；footer：每頁下方是否印簡報短名與頁碼。
+page:
+  transition: fade
+  footer: true
+
+# lint 門檻。safety 是可用寬度的安全係數（全形 1.0 em、半形 0.55 em 估寬，再乘它）；
+# orphan-chars 是折行後末行 <= 此字數視為孤字；bold-extra 是粗體多估的寬度比例。
+lint:
+  safety: 0.8
+  orphan-chars: 4
+  bold-extra: 0.05

@@ -1,0 +1,28 @@
+[project]
+name = "deckstyle"
+version = "0.1.0"
+description = "簡報引擎：宣告式規格（deck.yml）→ PPTX。品牌讀 Quarto 的 _brand.yml，作者讀 _quarto.yml 與 _metadata.yml，含 lint、預覽與 PDF 匯出。"
+requires-python = ">=3.11"
+dependencies = ["python-pptx>=1.0", "lxml>=5", "pillow>=10", "pyyaml>=6"]
+
+[project.scripts]
+deckstyle = "deckstyle.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = ["ruff>=0.6", "pyright>=1.1", "lxml-stubs"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.pyright]
+include = ["deckstyle"]
+pythonVersion = "3.11"
+venvPath = "."
+venv = ".venv"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

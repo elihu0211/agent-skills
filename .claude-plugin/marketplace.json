@@ -72,7 +72,7 @@
     },
     {
       "name": "build-tech-deck",
-      "description": "High-density technical deck layout and declarative PPTX generation: semantic palette, diagram and real-screenshot blocks, no-wrap and plain-name lints",
+      "description": "Declarative YAML technical decks as PPTX: Quarto brand.yml palette and layered authors, real PPTX template layouts, diagram, chart and screenshot blocks, no-wrap and plain-name lints",
       "source": "./",
       "strict": false,
       "skills": [
