@@ -71,8 +71,8 @@ _A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
 def _para_width_pt(par: Any, bold_extra: float, base: _Inherited) -> tuple[float, float]:
     """回傳（段落估算寬度 pt, 代表字級 pt）。run 沒指定字級與粗細時用繼承值。
 
-    明確換行把段落切成幾行，各行分開估寬，取最寬的一行：換行前後兩行不是一行。換行有兩種寫法：`a:br`
-    （標題裡的 `\\n`），與 run 文字裡的換行字元（表格儲存格與文字框裡的 `\\n`，PowerPoint 照樣排成兩行）。
+    明確換行（`a:br`，或 run 文字裡的換行字元，如表格儲存格與文字框裡寫的 `\\n`）把段落切成幾行，各行分開估寬，
+    取最寬的一行：換行前後兩行不是一行。
     """
     lines, size = [0.0], base.size
     for el in par._p:
@@ -85,7 +85,7 @@ def _para_width_pt(par: Any, bold_extra: float, base: _Inherited) -> tuple[float
             b_attr = props.get("b") if props is not None else None
             bold = base.bold if b_attr is None else b_attr in ("1", "true")
             text = "".join(t.text or "" for t in el.findall(f"{_A}t"))
-            for k, piece in enumerate(text.replace("\v", "\n").split("\n")):
+            for k, piece in enumerate(text.replace("\v", "\n").split("\n")):  # run 文字裡的換行字元也是換行
                 if k:
                     lines.append(0.0)
                 lines[-1] += sum(_char_em(c) for c in piece) * size * (1 + bold_extra if bold else 1.0)
