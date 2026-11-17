@@ -1,5 +1,5 @@
 ---
-name: vault-doctor
+name: audit-obsidian-vault
 description: >-
   唯讀稽核 Obsidian 技術知識庫：章節模板對稱性、斷鏈、孤兒筆記、Frontmatter 與 aliases 撞名，輸出文字或 JSON 健康報告與修復順序。
   用於檢查、診斷、修復知識庫結構，或健檢誤報 wikilink（如程式碼區塊裡的 `[[ ]]`）、搬移章節後連結失效時。
@@ -7,7 +7,7 @@ compatibility: 需要 python3（僅標準函式庫）；搬移檔案修復時需
 license: MIT
 ---
 
-# 知識庫健檢（Vault Doctor）
+# 稽核 Obsidian 知識庫
 
 維持 Markdown 知識庫「弱資料夾、強連結、對稱章節模板」的結構。腳本唯讀，修復由你依下方流程手動做。
 
@@ -23,7 +23,7 @@ license: MIT
 ## 執行
 
 ```bash
-python3 scripts/doctor.py [vault-path] [--json] [--limit N] [--strict]
+python3 scripts/audit.py [vault-path] [--json] [--limit N] [--strict]
 ```
 
 路徑相對於本技能目錄。`--help` 列出全部旗標。

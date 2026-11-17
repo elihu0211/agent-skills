@@ -11,8 +11,8 @@
 | [`maintain-agent-context`](skills/maintain-agent-context) | 維護 `AGENTS.md`（預設不放 `CLAUDE.md`）、`.agents/skills` 與 `skills-lock.json` |
 | [`name-files`](skills/name-files) | 檔案與目錄命名、文件為主的 repo 結構 |
 | [`structure-docs`](skills/structure-docs) | 以 Diátaxis 組織 `docs/` |
-| [`dsrm-technical-report`](skills/dsrm-technical-report) | 撰寫與審查 DSRM 技術報告 |
-| [`vault-doctor`](skills/vault-doctor) | 稽核與維護 Obsidian 知識庫之二層章節模板、斷鏈、孤兒筆記與 Frontmatter |
+| [`write-dsrm-technical-report`](skills/write-dsrm-technical-report) | 撰寫與審查 DSRM 技術報告 |
+| [`audit-obsidian-vault`](skills/audit-obsidian-vault) | 稽核與維護 Obsidian 知識庫之二層章節模板、斷鏈、孤兒筆記與 Frontmatter |
 | [`build-tech-deck`](skills/build-tech-deck) | 高密度技術提案、專題報告、工程架構與客戶說明簡報（PPTX）：語義色票、圖表與實際畫面截圖區塊、零折行與白話命名 |
 
 ## 結構

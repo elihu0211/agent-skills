@@ -26,12 +26,12 @@
       ]
     },
     {
-      "name": "dsrm-technical-report",
+      "name": "write-dsrm-technical-report",
       "description": "Write or review a DSRM technical report, including Taiwanese master's technical reports",
       "source": "./",
       "strict": false,
       "skills": [
-        "./skills/dsrm-technical-report"
+        "./skills/write-dsrm-technical-report"
       ]
     },
     {
@@ -62,12 +62,12 @@
       ]
     },
     {
-      "name": "vault-doctor",
+      "name": "audit-obsidian-vault",
       "description": "Audit and repair Obsidian tech vault structure, broken links, orphans, and templates",
       "source": "./",
       "strict": false,
       "skills": [
-        "./skills/vault-doctor"
+        "./skills/audit-obsidian-vault"
       ]
     },
     {
