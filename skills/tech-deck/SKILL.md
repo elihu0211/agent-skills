@@ -15,8 +15,8 @@ license: MIT
 
 ## 流程
 
-1. **複製範本**：把 [`assets/deck-template/`](assets/deck-template) 整個複製到專案的簡報目錄（`tokens.toml`、`theme.py`、`deck_engine.py`、`deck_spec.py`、`build_deck.py`、`screens/`）。
-2. **只改 `deck_spec.py`**：`SPEC` 含封面與每頁一筆 `(章節標籤, 主標題, [(原語, 欄位)], 講稿備註)`。範本十一頁涵蓋全部原語，替換內容、刪掉不用的頁。要改色票改 `tokens.toml`，不改 `theme.py`。
+1. **複製範本**：把 [`assets/deck-template/`](assets/deck-template) 整個複製到專案的簡報目錄（`tokens.toml`、`defaults.toml`、`theme.py`、`deck_engine.py`、`deck_spec.py`、`build_deck.py`、`screens/`）。
+2. **只改 `deck_spec.py`**：`SPEC` 含封面與每頁一筆 `(章節標籤, 主標題, [(原語, 欄位)], 講稿備註)`。範本十一頁涵蓋全部原語，替換內容、刪掉不用的頁。要改色票改 `tokens.toml`，不改 `theme.py`；封面作者預設在 `defaults.toml`。
 3. **建置**：`uv run build_deck.py out.pptx`（`--pdf` 另以 PowerPoint 匯出向量 PDF）。
 4. **跑兩支 lint**：`uv run <技能路徑>/scripts/lint_wrap.py out.pptx`（零折行）與 `uv run <技能路徑>/scripts/lint_names.py out.pptx`（白話命名；專案的倉庫與服務代號用 `--deny` 帶入）。有違規就改寫該行文字，不是調字級，重跑到通過。
 5. **目視**：轉 PDF 或圖片逐頁看。lint 以字寬估算，字型與應用程式不同會有差異。
@@ -29,8 +29,9 @@ license: MIT
 - **單行不折行**：標題、卡片、表格每行都要放得進一行；孤字（折行後末行只剩 3–4 字）一律改寫。各版面的字數上限與原語欄位見 [references/patterns.md](references/patterns.md)。
 - **內容結構**：「**四字粗體標籤**：精煉說明」，或「現象／後果」兩層；剔除口語贅字，只留作業現象、數據與管理後果。一頁一個結論，主標題寫結論句。
 - **畫面用實際截圖**：用 `shots` 放示範資料的實際截圖，不手繪、不用生成的假畫面；做不到的狀態在頁面寫明，不補假圖。
+- **不標進度**：頁面與講稿只描述完成後的長相，不寫「規劃中」「目標流程」「尚未實作」「待核對」；程式現況與待核對事項寫在維護者看的文件。研究與評估報告的限制與未竟之處是內容，照寫。
 - **白話命名**：投影片與講稿備註不顯示倉庫名稱與代碼名稱（服務代號、路徑、設定鍵、資料表與欄位、檔名），改成白話的功能名稱。
-- **講稿分流**：鋪陳、背景與口頭引導寫進備註（規格的第四欄），投影片只留骨架、數據與圖形；數字標明是實測、示例或估算，未驗證的部分也要寫。
+- **講稿分流**：鋪陳、背景與口頭引導寫進備註（規格的第四欄），投影片只留骨架、數據與圖形；數字標明是實測、示例或估算。
 - **版心**：16:9（13.333 × 7.50 in）；內容寬 11.73 in，上緣 `T.TOP = 1.70`，安全底線 `T.BOTTOM = 6.60`，頁尾線在 7.00。
 
 ## 規則

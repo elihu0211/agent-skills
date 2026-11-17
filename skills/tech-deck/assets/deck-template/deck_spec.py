@@ -1,5 +1,6 @@
 """宣告式規格：簡報內容只改這裡。範例只示範各原語的寫法，替換成實際內容後刪掉不用的頁。
 
+封面作者不在這裡寫：預設在 defaults.toml，要換才寫 "author"，寫空字串代表沒有。
 SPEC["slides"] 每頁是 (章節標籤, 主標題, [(原語, 欄位)], 講稿備註)。原語與欄位見 deck_engine.BLOCKS 與
 references/patterns.md；顏色只用 kind 名稱，不寫色碼（色票在 tokens.toml）。
 投影片不寫倉庫名稱與代碼名稱（服務代號、路徑、設定鍵、檔名）；畫面用實際截圖，路徑相對本檔所在目錄。
@@ -8,7 +9,6 @@ references/patterns.md；顏色只用 kind 名稱，不寫色碼（色票在 tok
 
 SPEC = {
     "short_title": "現場雙碼掃描 · 技術提案",
-    "author": "範例單位",
     "cover": {
         "category": "技術提案 · 範例",
         "title": "把人為紀律\n變成可驗證的結構",

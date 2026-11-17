@@ -5,7 +5,7 @@
       "id": "create-engineering-deck",
       "query": "請幫我用專業工程簡報風格（白底極簡、細線圓角、依語義配色）製作一份 16:9 的專題提案 PPTX。",
       "expected_behavior": [
-        "複製 assets/deck-template 的 tokens.toml、theme.py、deck_engine.py、deck_spec.py、build_deck.py，內容只寫進 deck_spec.py",
+        "複製 assets/deck-template 的 tokens.toml、defaults.toml、theme.py、deck_engine.py、deck_spec.py、build_deck.py，內容只寫進 deck_spec.py",
         "使用 16:9 版心、白底細線圓角與藍（資料與結構）、綠（系統確定）、琥珀（只給候選）、玫紅（須人判斷或失敗）的語義 kind，規格不寫色碼",
         "建置後執行 scripts/lint_wrap.py 與 scripts/lint_names.py，有違規就改寫文字並重跑",
         "逐頁轉 PDF 或圖片目視，通過後才回報完成"

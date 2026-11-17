@@ -45,6 +45,42 @@ def kinds(path: str) -> set[str]:
 
 # ---- 範本與引擎 ----
 
+def cover_texts(path: str) -> list[str]:
+    from pptx import Presentation
+
+    return [sh.text_frame.text for sh in Presentation(path).slides[0].shapes if sh.has_text_frame]
+
+
+def cover_spec(**author) -> dict:
+    spec = one_slide([("note", {"lines": ["結論"]})])
+    spec.pop("author")
+    spec.update(author)
+    return spec
+
+
+def test_cover_author_comes_from_defaults_when_spec_is_silent():
+    assert "範例單位" in cover_texts(build_spec(cover_spec()))
+
+
+def test_spec_author_overrides_the_default():
+    texts = cover_texts(build_spec(cover_spec(author="某某單位")))
+    assert "某某單位" in texts and "範例單位" not in texts
+
+
+def test_empty_author_leaves_the_cover_line_out():
+    texts = cover_texts(build_spec(cover_spec(author="")))
+    assert "範例單位" not in texts and "" not in texts
+
+
+def test_non_string_author_stops_the_build():
+    try:
+        build_spec(cover_spec(author=["甲", "乙"]))
+    except ValueError as e:
+        assert "字串" in str(e)
+    else:
+        raise AssertionError("非字串的作者欄應該停下")
+
+
 def test_sample_template_is_clean():
     path = build_spec(deck_spec.SPEC)
     assert lint_wrap.lint(path, 0.8) == []
