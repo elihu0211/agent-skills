@@ -44,6 +44,22 @@ class ExportError(RuntimeError):
     """PDF 匯出失敗；訊息說明原因與處置。"""
 
 
+# PowerPoint 卡住時 AppleScript 常回的錯誤碼：-9074（儲存失敗）、-2700（AppleEvent 逾時）、
+# -609（連線失效）、-1712（逾時）。實測這些失敗前，PowerPoint 的系統日誌都有儲存對話框
+# （openAndSavePanelService）；恢復都發生在 PowerPoint 行程重啟之後。
+_STUCK_CODES = ("-9074", "-2700", "-609", "-1712")
+
+
+def _hint(stderr: str) -> str:
+    """錯誤碼屬於「PowerPoint 卡住」一類時，附上處置；其餘錯誤原樣，不猜原因。"""
+    if not any(f"({code})" in stderr or f" {code}" in stderr for code in _STUCK_CODES):
+        return ""
+    return (
+        "\n處置：PowerPoint 可能停在儲存對話框或卡住了。切到 PowerPoint 關掉對話框與殘留開著的簡報；"
+        "仍失敗就結束 PowerPoint（先存好自己的檔案）再重跑。"
+    )
+
+
 def export_pdf(pptx: Path, pdf: Path) -> None:
     """用 PowerPoint 匯出向量 PDF；失敗丟 `ExportError`。"""
     pdf.unlink(missing_ok=True)
@@ -68,8 +84,9 @@ def export_pdf(pptx: Path, pdf: Path) -> None:
             "並關掉它殘留開著的這份簡報後重試。"
         ) from None
     if run.returncode != 0:
+        stderr = run.stderr.strip()
         raise ExportError(
-            f"PowerPoint 匯出 {pptx.name} 失敗（osascript 結束碼 {run.returncode}）：{run.stderr.strip()}"
+            f"PowerPoint 匯出 {pptx.name} 失敗（osascript 結束碼 {run.returncode}）：{stderr}{_hint(stderr)}"
         )
     if not pdf.is_file() or pdf.stat().st_size == 0:
         raise ExportError(f"PowerPoint 回報成功，但沒有產出 {pdf}。")
