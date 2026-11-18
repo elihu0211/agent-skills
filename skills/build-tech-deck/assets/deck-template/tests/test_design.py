@@ -43,6 +43,9 @@ def test_kebab_keys_become_snake_fields() -> None:
         (lambda d: d["page"].update(footer="yes"), "true 或 false"),
         (lambda d: d["lint"].update(safety=1.5), "safety"),
         (lambda d: d["frame"].pop("ref-y"), "缺 ref_y"),
+        (lambda d: d["frame"].pop("header-rule-y"), "缺 header_rule_y"),
+        (lambda d: d["frame"].update(**{"header-rule-y": 1.2}), "header-rule-y"),
+        (lambda d: d["frame"].update(**{"header-rule-y": 1.8}), "header-rule-y"),
     ],
 )
 def test_invalid_design_is_rejected(edit: Any, message: str) -> None:

@@ -97,6 +97,22 @@ def test_master_draws_footer_rule_only_when_footer_is_on(theme: Theme) -> None:
     assert rules(template.build(_footer_off(theme))) == []
 
 
+def test_content_layouts_draw_the_header_rule(theme: Theme) -> None:
+    """標題區與內容區之間有分隔線，位置取自 frame.header-rule-y；封面、分隔頁、結語頁沒有。"""
+    prs = template.build(theme)
+
+    def rules(name: str) -> list[Any]:
+        layout = next(la for la in prs.slide_layouts if la.name == name)
+        return [s for s in layout.shapes if s.shape_type == MSO_SHAPE_TYPE.LINE and s.name == "標題分隔線"]
+
+    for name in ("Title Only", "Title and Content"):
+        (rule,) = rules(name)
+        assert rule.top == pytest.approx(theme.frame.header_rule_y * 914400, abs=2)
+        assert rule.width == pytest.approx(theme.layout.width * 914400, abs=2)
+    for name in ("Title Slide", "Section Header", "Closing", "Blank"):
+        assert rules(name) == []
+
+
 def test_cover_layouts_hide_master_decoration(theme: Theme) -> None:
     prs = template.build(theme)
     shown = {la.name: la._element.get("showMasterSp") for la in prs.slide_layouts}
