@@ -322,6 +322,13 @@ def _meta_ph(t: Theme, ids: _Ids, prompt: str) -> str:
     )  # fmt: skip
 
 
+def _header_rule(t: Theme, ids: _Ids) -> str:
+    """內容頁的標題區分隔線：把章節標籤與標題（上）同內容區（下）明確分開。"""
+    return _line(
+        ids, "標題分隔線", t.layout.left, t.frame.header_rule_y, t.layout.width, _hex(t, "slate-rule"), t.line_hair
+    )
+
+
 def _accent(t: Theme, ids: _Ids) -> str:
     fr = t.frame
     return _line(ids, "主色細線", t.layout.left, fr.accent_y, fr.accent_w, _hex(t, "blue"), fr.accent_weight_pt)
@@ -383,6 +390,7 @@ def _layout_trees(t: Theme) -> dict[str, tuple[str, str, bool]]:
             [
                 _sp(t, ids, "標題", 'type="title"', "按一下以編輯標題"),
                 _ref_ph(t, ids, fr.ref_y, ty.slide_ref),
+                _header_rule(t, ids),
                 _footer_phs(t, ids, with_geom=False),
             ]
         ),
@@ -396,6 +404,7 @@ def _layout_trees(t: Theme) -> dict[str, tuple[str, str, bool]]:
             [
                 _sp(t, ids, "標題", 'type="title"', "按一下以編輯標題"),
                 _ref_ph(t, ids, fr.ref_y, ty.slide_ref),
+                _header_rule(t, ids),
                 _sp(t, ids, "內容", f'idx="{IDX_BODY}"', "按一下以編輯文字"),
                 _footer_phs(t, ids, with_geom=False),
             ]

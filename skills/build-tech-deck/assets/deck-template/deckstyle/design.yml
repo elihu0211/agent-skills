@@ -28,9 +28,10 @@ layout:
 
 # 頁框幾何（英吋）：各種頁面的標題、標籤與裝飾線位置。
 frame:
-  ref-y: 0.46              # 內容頁章節標籤
+  ref-y: 0.38              # 內容頁章節標籤
   title-y: 0.70            # 內容頁標題
-  title-h: 0.82
+  title-h: 0.80
+  header-rule-y: 1.56      # 內容頁標題區與內容區之間的分隔線
   cover-category-y: 0.6    # 封面類別
   cover-title-y: 2.3
   cover-title-h: 1.6

@@ -70,6 +70,7 @@ class Frame:
     ref_y: float
     title_y: float
     title_h: float
+    header_rule_y: float
     cover_category_y: float
     cover_title_y: float
     cover_title_h: float
@@ -198,7 +199,7 @@ def parse(data: Any) -> Design:
     sections = {"geometry", "layout", "frame", "type", "limits", "page", "lint"}
     if unknown := set(data) - sections - {"schema"}:
         raise DesignError(f"未知的區段 {', '.join(sorted(map(str, unknown)))}")
-    return Design(
+    design = Design(
         geometry=_build(Geometry, data.get("geometry"), "geometry"),
         layout=_build(Layout, data.get("layout"), "layout"),
         frame=_build(Frame, data.get("frame"), "frame"),
@@ -207,6 +208,10 @@ def parse(data: Any) -> Design:
         page=_build(Page, data.get("page"), "page"),
         lint=_build(Lint, data.get("lint"), "lint"),
     )
+    fr = design.frame
+    if not (fr.ref_y < fr.title_y and fr.title_y + fr.title_h <= fr.header_rule_y < design.layout.top):
+        raise DesignError("frame：須滿足 ref-y < title-y，且 title-y + title-h <= header-rule-y < layout 的 top")
+    return design
 
 
 def load(path: Path = DESIGN_PATH) -> Design:
