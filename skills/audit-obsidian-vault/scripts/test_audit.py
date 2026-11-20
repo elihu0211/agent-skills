@@ -8,7 +8,7 @@ from contextlib import redirect_stdout
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from audit import diagnose, parse_aliases, run_audit, strip_code  # noqa: E402
+from audit import diagnose, load_rules, parse_aliases, run_audit, strip_code  # noqa: E402
 
 FM = "---\ntype: moc\nupdated: 2026-01-01\ntags: [moc]\n---\n"
 
@@ -184,6 +184,49 @@ def test_flat_vault_is_unchanged_by_area_support():
         make_vault(root, "")
         r = diagnose(root)
         assert r["areas"] == 0 and r["themes"] == 1
+
+
+def test_rules_are_off_by_default():
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        make_vault(root, "")
+        (root / "T" / "雜.md").write_text("---\ntype: whatever\nfoo: 1\nupdated: 2026-01-01\ntags: [孤]\n---\n[[庫首頁]]\n", encoding="utf-8")
+        r = diagnose(root)
+        assert r["bad_type"] == [] and r["bad_keys"] == [] and r["lone_tags"] == [] and r["rules"] == {}
+
+
+def test_vocabulary_rules():
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        make_vault(root, "[[雜]]\n")
+        (root / "T" / "雜.md").write_text("---\ntype: whatever\ntitle: x\nupdated: 2026-01-01\ntags: [孤]\n---\n", encoding="utf-8")
+        rules = {"types": ["moc", "concept"], "allowed_keys": ["tags", "type", "updated"], "min_tag_uses": 2, "require_topic_tag": True}
+        r = diagnose(root, rules=rules)
+        assert any("雜.md" in x and "whatever" in x for x in r["bad_type"])
+        assert any("雜.md" in x and "title" in x for x in r["bad_keys"])
+        assert any(x.startswith("孤") for x in r["lone_tags"])
+        assert any("雜.md" in x and "缺標籤 T" in x for x in r["missing_topic_tag"])
+        assert quiet(root) == 0  # 詞彙規則只是警告
+        assert run_audit_with(root, rules, strict=True) == 1
+
+
+def run_audit_with(root: Path, rules: dict, **kw) -> int:
+    cfg = root / "rules.json"
+    cfg.write_text(json.dumps(rules), encoding="utf-8")
+    return quiet(root, config=str(cfg), **kw)
+
+
+def test_home_keys_and_config_file():
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        make_vault(root, "")
+        (root / ".agents").mkdir()
+        (root / ".agents" / "audit.json").write_text(json.dumps({"home_keys": ["layer"], "min_tag_uses": 2}), encoding="utf-8")
+        rules = load_rules(root)
+        assert rules["home_keys"] == ["layer"]
+        r = diagnose(root, rules=rules)
+        assert any("庫首頁.md" in x and "layer" in x for x in r["missing_home_keys"])
+        assert r["lone_tags"] == [x for x in r["lone_tags"] if "moc" not in x]  # moc 與主題名不算孤立
 
 
 if __name__ == "__main__":

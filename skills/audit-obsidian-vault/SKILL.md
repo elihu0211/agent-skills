@@ -19,6 +19,7 @@ license: MIT
 2. **連結**：每個 `[[wikilink]]` 的目標存在（筆記或附件）；跨主題引用用帶路徑形式 `[[主題/庫首頁|別名]]`，避免撞名；路徑以**尾綴**解析（與 Obsidian 相同），所以主題搬進分區資料夾後，`[[RAG/庫首頁]]` 仍指向 `10 知識工程/RAG/庫首頁.md`，不必改寫；表格內的 pipe 要轉義 `\|`。
 3. **孤兒筆記**：沒被任何筆記引用的檔案，補進所屬章節 `0 章首.md` 的索引區塊。
 4. **Frontmatter**：每篇有 ISO 格式 `updated: YYYY-MM-DD`；MOC 有 `type: moc` 與 `tags: [moc]`；`aliases` 不與其他筆記的檔名或別名撞名。
+5. **詞彙規則（選用）**：知識庫自訂的 frontmatter 詞彙，預設全關，開了只產生警告（`--strict` 才算失敗）。見下節。
 
 ## 執行
 
@@ -38,6 +39,30 @@ python3 scripts/audit.py [vault-path] [--json] [--limit N] [--strict]
 結束碼：`0` 通過；`1` 有結構缺漏或斷鏈（加 `--strict` 時含警告類）；`2` 用法錯誤（例如目錄不存在）。
 
 掃描連結前先剝除 fenced code（` ``` `、`~~~`）與 inline code，所以程式碼裡的 `[[ -t 1 ]]` 不計為斷鏈；帶副檔名的附件嵌入（`![[diagram.png]]`）以檔案是否存在判斷。忽略目錄（`.git`、`.obsidian`、`.claude`、`scripts`、`evals` 等）以相對於 vault 根的路徑比對，所以 vault 本身放在 `.claude/worktrees/` 底下也會被掃。
+
+## 詞彙規則
+
+在 vault 放 `.agents/audit.json`（或用 `--config` 指定）即啟用，沒有檔案就不檢查。欄位都可省略：
+
+```json
+{
+  "types": ["moc", "architecture", "concept", "guide", "reference"],
+  "allowed_keys": ["tags", "type", "updated", "layer", "area", "aliases"],
+  "min_tag_uses": 2,
+  "require_topic_tag": true,
+  "home_keys": ["layer", "area"]
+}
+```
+
+| 欄位 | 檢查 |
+|------|------|
+| `types` | 每篇 `type` 必須在清單內（缺 `type` 也算） |
+| `allowed_keys` | frontmatter 只能出現清單內的欄位 |
+| `min_tag_uses` | 標籤至少被這麼多篇筆記使用；主題資料夾名與 `moc` 不算 |
+| `require_topic_tag` | 主題內的筆記（庫首頁除外）`tags` 要含所屬主題資料夾名 |
+| `home_keys` | 每個主題的 `庫首頁` 必須有這些欄位 |
+
+規則寫在 vault 裡（隨版控），所以 pre-commit 不必另加旗標。
 
 ## 修復順序
 
