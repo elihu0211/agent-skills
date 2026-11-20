@@ -9,6 +9,8 @@
    路徑連結以尾綴解析，與 Obsidian 一致：[[RAG/庫首頁]] 可對應 10 知識工程/RAG/庫首頁.md。
 3. 孤兒筆記：沒被任何其他筆記引用。
 4. Frontmatter：ISO 格式 updated、MOC 的 type/tags 標記、aliases 撞名。
+5. 詞彙規則（選用，由 `.agents/audit.json` 或旗標啟用）：type 詞彙、允許的欄位、孤立標籤、
+   筆記是否帶所屬主題標籤、庫首頁必備欄位。預設全部關閉，只產生警告。
 
 結束碼：0 無結構或斷鏈問題；1 有（--strict 時孤兒、Frontmatter 與撞名也算）；2 用法錯誤。
 輸出：預設人類可讀文字；--json 輸出結構化結果，方便 agent 與腳本解析。
@@ -30,6 +32,15 @@ ALWAYS_IGNORED = {".git", ".obsidian", ".serena", ".agents", ".claude", "node_mo
 ROOT_IGNORED = {"scripts", "evals"}
 NOT_THEMES = ALWAYS_IGNORED | ROOT_IGNORED | {"template"}
 DOC_FILES = {"README.md", "AGENTS.md", "CLAUDE.md", "LICENSE"}
+
+RULE_DEFAULTS = {
+    "types": [],  # 允許的 type 值；空清單表示不檢查
+    "allowed_keys": [],  # 允許出現的 frontmatter 欄位；空清單表示不檢查
+    "min_tag_uses": 0,  # 標籤至少被幾篇筆記使用；0 表示不檢查
+    "require_topic_tag": False,  # 主題內的筆記 tags 須含主題資料夾名
+    "home_keys": [],  # 庫首頁必備欄位
+}
+CONFIG_PATH = ".agents/audit.json"
 
 DEFAULTS = {
     "index": "Index.md",
@@ -55,7 +66,11 @@ def parse_frontmatter(content: str) -> dict[str, str]:
 
 
 def parse_aliases(content: str) -> list[str]:
-    """支援 `aliases: [a, b]`、`aliases: a` 與多行 `- a` 清單。"""
+    return parse_list_field(content, "aliases")
+
+
+def parse_list_field(content: str, key: str) -> list[str]:
+    """支援 `key: [a, b]`、`key: a` 與多行 `- a` 清單。"""
     if not content.startswith("---\n"):
         return []
     head, sep, _ = content[4:].partition("\n---\n")
@@ -63,7 +78,7 @@ def parse_aliases(content: str) -> list[str]:
         return []
     lines = head.splitlines()
     for i, line in enumerate(lines):
-        if not re.match(r"^aliases\s*:", line):
+        if not re.match(rf"^{re.escape(key)}\s*:", line):
             continue
         value = line.split(":", 1)[1].strip()
         if value:
@@ -130,9 +145,19 @@ def find_themes(vault_dir: Path, theme_home: str) -> tuple[list[Path], list[Path
     return areas, themes
 
 
-def diagnose(vault_dir: Path, names: dict[str, str] | None = None) -> dict:
+def load_rules(vault_dir: Path, config: str | None = None) -> dict:
+    """讀 `.agents/audit.json`（或 --config 指定的檔）；沒有檔案就回傳全關閉的預設。"""
+    path = Path(config) if config else vault_dir / CONFIG_PATH
+    rules = dict(RULE_DEFAULTS)
+    if path.is_file():
+        rules.update({k: v for k, v in json.loads(path.read_text(encoding="utf-8")).items() if k in RULE_DEFAULTS})
+    return rules
+
+
+def diagnose(vault_dir: Path, names: dict[str, str] | None = None, rules: dict | None = None) -> dict:
     """掃描 vault，回傳結構化結果；不輸出、不改檔。"""
     n = {**DEFAULTS, **(names or {})}
+    rule = {**RULE_DEFAULTS, **(rules or {})}
     vault_dir = vault_dir.resolve()
 
     md_files = [p for p in vault_dir.rglob("*.md") if not is_ignored(p.relative_to(vault_dir))]
@@ -208,6 +233,42 @@ def diagnose(vault_dir: Path, names: dict[str, str] | None = None) -> dict:
             missing_moc.append(rel)
         for alias in parse_aliases(content):
             alias_owners.setdefault(alias.casefold(), []).append(rel)
+    # 詞彙規則（選用）
+    theme_of = {d: d.name for d in theme_dirs}
+    bad_type: list[str] = []
+    bad_keys: list[str] = []
+    missing_topic_tag: list[str] = []
+    missing_home_keys: list[str] = []
+    tag_users: dict[str, set[str]] = {}
+    for p, content in contents.items():
+        if p.name in DOC_FILES:
+            continue
+        rel = str(p.relative_to(vault_dir))
+        meta = parse_frontmatter(content)
+        head = content[4:].partition("\n---\n")[0] if content.startswith("---\n") else ""
+        tags = parse_list_field(content, "tags")
+        for tag in tags:
+            tag_users.setdefault(tag, set()).add(rel)
+        if rule["types"] and meta.get("type", "") not in rule["types"]:
+            bad_type.append(f"{rel}（type: {meta.get('type') or '缺'}）")
+        if rule["allowed_keys"]:
+            extra = sorted({k for k in re.findall(r"^([A-Za-z_][\w-]*)\s*:", head, re.M)} - set(rule["allowed_keys"]))
+            if extra:
+                bad_keys.append(f"{rel}（{', '.join(extra)}）")
+        topic = next((theme_of[a] for a in p.parents if a in theme_of), None)
+        if rule["require_topic_tag"] and topic and p.name != n["theme_home"] and topic not in tags:
+            missing_topic_tag.append(f"{rel}（缺標籤 {topic}）")
+        if rule["home_keys"] and p.name == n["theme_home"] and p.parent in theme_of:
+            lacking = [k for k in rule["home_keys"] if not meta.get(k)]
+            if lacking:
+                missing_home_keys.append(f"{rel}（缺 {', '.join(lacking)}）")
+    topic_names = set(theme_of.values()) | {"moc"}
+    lone_tags = (
+        sorted(f"{t}（{next(iter(u))}）" for t, u in tag_users.items() if len(u) < rule["min_tag_uses"] and t not in topic_names)
+        if rule["min_tag_uses"]
+        else []
+    )
+
     stem_owners: dict[str, list[str]] = {}
     for p in contents:
         stem_owners.setdefault(p.stem.casefold(), []).append(str(p.relative_to(vault_dir)))
@@ -229,6 +290,12 @@ def diagnose(vault_dir: Path, names: dict[str, str] | None = None) -> dict:
         "missing_updated": sorted(missing_updated),
         "missing_moc": sorted(missing_moc),
         "alias_conflicts": alias_conflicts,
+        "rules": {k: v for k, v in rule.items() if v != RULE_DEFAULTS[k]},
+        "bad_type": sorted(bad_type),
+        "bad_keys": sorted(bad_keys),
+        "lone_tags": lone_tags,
+        "missing_topic_tag": sorted(missing_topic_tag),
+        "missing_home_keys": sorted(missing_home_keys),
         "unreadable": unreadable,
     }
 
@@ -255,17 +322,31 @@ def render_text(r: dict, limit: int, index_name: str) -> None:
     _section("缺少 ISO updated", r["missing_updated"], limit, "warn")
     _section("MOC 缺 type: moc 或 tags: [moc]", r["missing_moc"], limit, "warn")
     _section("aliases 撞名", [f"{c['alias']}：{', '.join(c['files'])}" for c in r["alias_conflicts"]], limit, "warn")
+    active = r.get("rules", {})
+    if "types" in active:
+        _section("type 不在詞彙內", r["bad_type"], limit, "warn")
+    if "allowed_keys" in active:
+        _section("frontmatter 出現未允許的欄位", r["bad_keys"], limit, "warn")
+    if "min_tag_uses" in active:
+        _section(f"標籤少於 {active['min_tag_uses']} 篇使用", r["lone_tags"], limit, "warn")
+    if "require_topic_tag" in active:
+        _section("筆記缺所屬主題標籤", r["missing_topic_tag"], limit, "warn")
+    if "home_keys" in active:
+        _section("庫首頁缺必備欄位", r["missing_home_keys"], limit, "warn")
     _section("無法讀取的檔案", r["unreadable"], limit, "warn")
 
 
 def failed(r: dict, strict: bool) -> bool:
     hard = bool(r["structure_errors"] or r["broken_links"])
-    soft = bool(r["orphans"] or r["missing_updated"] or r["missing_moc"] or r["alias_conflicts"])
+    soft = bool(
+        r["orphans"] or r["missing_updated"] or r["missing_moc"] or r["alias_conflicts"]
+        or r["bad_type"] or r["bad_keys"] or r["lone_tags"] or r["missing_topic_tag"] or r["missing_home_keys"]
+    )
     return hard or (strict and soft)
 
 
-def run_audit(vault_dir: Path, names: dict[str, str] | None = None, *, limit: int = 20, as_json: bool = False, strict: bool = False) -> int:
-    report = diagnose(vault_dir, names)
+def run_audit(vault_dir: Path, names: dict[str, str] | None = None, *, limit: int = 20, as_json: bool = False, strict: bool = False, config: str | None = None) -> int:
+    report = diagnose(vault_dir, names, load_rules(vault_dir, config))
     if as_json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:
@@ -282,13 +363,14 @@ def main() -> None:
     parser.add_argument("--json", action="store_true", help="輸出 JSON（不受 --limit 影響，列出全部）")
     parser.add_argument("--limit", type=int, default=20, help="每類最多列出幾筆（預設 20；0 為全部）")
     parser.add_argument("--strict", action="store_true", help="孤兒、Frontmatter 缺漏與 aliases 撞名也視為失敗")
+    parser.add_argument("--config", help=f"詞彙規則檔（預設 vault 內的 {CONFIG_PATH}，沒有就不檢查）")
     args = parser.parse_args()
     root = Path(args.vault)
     if not root.is_dir():
         print(f"找不到目錄：{root}", file=sys.stderr)
         sys.exit(2)
     names = {k: getattr(args, k) for k in DEFAULTS}
-    sys.exit(run_audit(root, names, limit=args.limit, as_json=args.json, strict=args.strict))
+    sys.exit(run_audit(root, names, limit=args.limit, as_json=args.json, strict=args.strict, config=args.config))
 
 
 if __name__ == "__main__":
