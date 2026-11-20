@@ -140,6 +140,52 @@ def test_text_limit_reports_remaining():
         assert "還有 3 筆" in buf.getvalue()
 
 
+def make_area_vault(root: Path, body: str) -> None:
+    """分區版：根目錄 / A 區 / 主題 T / 章 01 X。"""
+    (root / "Index.md").write_text(FM + "[[T/庫首頁]]\n" + body, encoding="utf-8")
+    theme = root / "10 區" / "T"
+    (theme / "00 總論").mkdir(parents=True)
+    (theme / "庫首頁.md").write_text(FM + "[[T/00 總論/0 章首]]\n", encoding="utf-8")
+    (theme / "00 總論" / "0 章首.md").write_text(FM, encoding="utf-8")
+
+
+def test_area_folder_groups_themes():
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        make_area_vault(root, "")
+        r = diagnose(root)
+        assert r["areas"] == 1 and r["themes"] == 1
+        assert r["structure_errors"] == [] and r["broken_links"] == []
+        assert quiet(root) == 0
+
+
+def test_area_theme_missing_pieces_are_reported_with_path():
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        make_area_vault(root, "")
+        (root / "10 區" / "T" / "01 章").mkdir()
+        (root / "10 區" / "U").mkdir()  # 分區內另一個主題，缺庫首頁與總論
+        errors = diagnose(root)["structure_errors"]
+        assert "10 區/T/01 章: 缺少 0 章首.md" in errors
+        assert "10 區/U: 缺少 庫首頁.md" in errors
+
+
+def test_path_links_resolve_by_suffix_like_obsidian():
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        make_area_vault(root, "[[T/00 總論/0 章首|總論]] [[10 區/T/庫首頁]] [[區外/庫首頁]]\n")
+        broken = [b["target"] for b in diagnose(root)["broken_links"]]
+        assert broken == ["區外/庫首頁"]  # 尾綴相符者解析成功，找不到的路徑仍是斷鏈
+
+
+def test_flat_vault_is_unchanged_by_area_support():
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        make_vault(root, "")
+        r = diagnose(root)
+        assert r["areas"] == 0 and r["themes"] == 1
+
+
 if __name__ == "__main__":
     failed = 0
     for name, fn in list(globals().items()):

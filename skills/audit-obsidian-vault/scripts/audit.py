@@ -3,7 +3,10 @@
 
 檢查項目：
 1. 結構模板：主題目錄 → 庫首頁.md + 00 總論/0 章首.md + 各章節目錄的 0 章首.md。
+   主題可直接放在根目錄，或放在「分區」資料夾下（根目錄的子資料夾沒有庫首頁.md、
+   但其子資料夾有，該資料夾即為分區，只負責分組，不要求庫首頁與總論）。
 2. 斷鏈：[[target]] 找不到對應的筆記或附件（程式碼區塊內的 [[ ]] 不計）。
+   路徑連結以尾綴解析，與 Obsidian 一致：[[RAG/庫首頁]] 可對應 10 知識工程/RAG/庫首頁.md。
 3. 孤兒筆記：沒被任何其他筆記引用。
 4. Frontmatter：ISO 格式 updated、MOC 的 type/tags 標記、aliases 撞名。
 
@@ -98,6 +101,35 @@ def strip_code(content: str) -> str:
     return "\n".join(out)
 
 
+def path_suffixes(rel_stem: str) -> set[str]:
+    """`a/b/c` → {`a/b/c`, `b/c`, `c`}：Obsidian 以路徑尾綴解析 wikilink。"""
+    parts = rel_stem.split("/")
+    return {"/".join(parts[i:]) for i in range(len(parts))}
+
+
+def find_themes(vault_dir: Path, theme_home: str) -> tuple[list[Path], list[Path]]:
+    """回傳 (分區, 主題)。
+
+    根目錄的子資料夾若自己有庫首頁，就是主題；沒有庫首頁、但其子資料夾有者是分區，
+    分區下所有子資料夾都視為主題（缺庫首頁的會被結構檢查抓出來）；其餘照舊視為主題並回報缺漏。
+    """
+    areas: list[Path] = []
+    themes: list[Path] = []
+
+    def visible(parent: Path) -> list[Path]:
+        return sorted(d for d in parent.iterdir() if d.is_dir() and not d.name.startswith("."))
+
+    for d in visible(vault_dir):
+        if d.name in NOT_THEMES:
+            continue
+        if not (d / theme_home).is_file() and any((c / theme_home).is_file() for c in visible(d)):
+            areas.append(d)
+            themes.extend(c for c in visible(d) if c.name not in NOT_THEMES)
+        else:
+            themes.append(d)
+    return areas, themes
+
+
 def diagnose(vault_dir: Path, names: dict[str, str] | None = None) -> dict:
     """掃描 vault，回傳結構化結果；不輸出、不改檔。"""
     n = {**DEFAULTS, **(names or {})}
@@ -112,10 +144,12 @@ def diagnose(vault_dir: Path, names: dict[str, str] | None = None) -> dict:
     unreadable: list[str] = []
     contents: dict[Path, str] = {}
     all_relative_stems: set[str] = set()
+    all_suffixes: set[str] = set()
     all_stems: set[str] = set()
     for p in md_files:
         rel = p.relative_to(vault_dir)
         all_relative_stems.add(str(rel.with_suffix("")))
+        all_suffixes |= path_suffixes(rel.with_suffix("").as_posix())
         all_stems.add(p.stem)
         try:
             contents[p] = p.read_text(encoding="utf-8")
@@ -124,16 +158,17 @@ def diagnose(vault_dir: Path, names: dict[str, str] | None = None) -> dict:
 
     # 結構模板
     structure_errors: list[str] = []
-    theme_dirs = [d for d in vault_dir.iterdir() if d.is_dir() and not d.name.startswith(".") and d.name not in NOT_THEMES]
-    for theme in sorted(theme_dirs):
+    area_dirs, theme_dirs = find_themes(vault_dir, n["theme_home"])
+    for theme in theme_dirs:
+        label = theme.relative_to(vault_dir).as_posix()
         if not (theme / n["theme_home"]).is_file():
-            structure_errors.append(f"{theme.name}: 缺少 {n['theme_home']}")
+            structure_errors.append(f"{label}: 缺少 {n['theme_home']}")
         overview = theme / n["overview_dir"]
         if not overview.is_dir() or not (overview / n["chapter_home"]).is_file():
-            structure_errors.append(f"{theme.name}: 缺少 {n['overview_dir']}/{n['chapter_home']}")
+            structure_errors.append(f"{label}: 缺少 {n['overview_dir']}/{n['chapter_home']}")
         for chapter in sorted(c for c in theme.iterdir() if c.is_dir() and not c.name.startswith(".")):
             if not (chapter / n["chapter_home"]).is_file():
-                structure_errors.append(f"{theme.name}/{chapter.name}: 缺少 {n['chapter_home']}")
+                structure_errors.append(f"{label}/{chapter.name}: 缺少 {n['chapter_home']}")
 
     # 斷鏈與被引用集合
     broken_links: list[dict[str, str]] = []
@@ -144,7 +179,7 @@ def diagnose(vault_dir: Path, names: dict[str, str] | None = None) -> dict:
         for m in WIKILINK.finditer(strip_code(content)):
             target = m.group(1).strip()
             referenced.update({target, Path(target).name})
-            if target in all_relative_stems or target in all_stems or target + ".md" in all_relative_stems:
+            if target in all_suffixes or target in all_stems or target + ".md" in all_relative_stems:
                 continue
             if Path(target).suffix and (target in attachments or Path(target).name in attachments):
                 continue  # ![[image.png]] 之類的附件嵌入
@@ -187,6 +222,7 @@ def diagnose(vault_dir: Path, names: dict[str, str] | None = None) -> dict:
         "notes": len(md_files),
         "has_index": (vault_dir / n["index"]).is_file(),
         "themes": len(theme_dirs),
+        "areas": len(area_dirs),
         "structure_errors": structure_errors,
         "broken_links": broken_links,
         "orphans": sorted(orphans),
@@ -210,7 +246,8 @@ def _section(title: str, rows: list[str], limit: int, level: str) -> None:
 
 
 def render_text(r: dict, limit: int, index_name: str) -> None:
-    print(f"知識庫：{r['vault']}\n筆記 {r['notes']} 篇、主題 {r['themes']} 個")
+    areas = f"、分區 {r['areas']} 個" if r.get("areas") else ""
+    print(f"知識庫：{r['vault']}\n筆記 {r['notes']} 篇、主題 {r['themes']} 個{areas}")
     print(f"[{'ok' if r['has_index'] else 'FAIL'}] 總入口 {index_name}：{'存在' if r['has_index'] else '缺失'}")
     _section("結構模板缺漏", r["structure_errors"], limit, "FAIL")
     _section("斷鏈", [f"{b['file']} → [[{b['target']}]]" for b in r["broken_links"]], limit, "FAIL")
