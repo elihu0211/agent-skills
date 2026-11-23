@@ -78,6 +78,15 @@
       "skills": [
         "./skills/build-tech-deck"
       ]
+    },
+    {
+      "name": "draw-mermaid-diagrams",
+      "description": "Write and lint dark/light-adaptive Mermaid diagrams (look: neo YAML frontmatter, transparent subgraph fills with semantic borders, zero hardcoded text/background colors)",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./skills/draw-mermaid-diagrams"
+      ]
     }
   ]
 }

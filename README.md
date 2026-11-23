@@ -14,6 +14,7 @@
 | [`write-dsrm-technical-report`](skills/write-dsrm-technical-report) | 撰寫與審查 DSRM 技術報告 |
 | [`audit-obsidian-vault`](skills/audit-obsidian-vault) | 稽核與維護 Obsidian 知識庫之二層章節模板、斷鏈、孤兒筆記與 Frontmatter |
 | [`build-tech-deck`](skills/build-tech-deck) | 高密度技術簡報（PPTX）：YAML 規格、Quarto 品牌與作者分層、語義色票、圖表與截圖區塊、零折行與白話命名 |
+| [`draw-mermaid-diagrams`](skills/draw-mermaid-diagrams) | 支援深／淺色自動切換的 Mermaid 圖表（`look: neo`、透明 `subgraph` 外框與語意邊框、離線 lint） |
 
 ## 結構
 
