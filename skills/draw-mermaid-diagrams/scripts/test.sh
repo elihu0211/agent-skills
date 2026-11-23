@@ -19,10 +19,10 @@ config:
   look: neo
 ---
 flowchart LR
-    subgraph S1["接入層"]
+    subgraph 現場["現場層"]
         A["API"] --> B[("DB")]
     end
-    style S1 fill:transparent,stroke:#2563EB,stroke-width:1.5px
+    style 現場 fill:transparent,stroke:#2563EB,stroke-width:1.5px
     style A stroke-dasharray: 5 5
 ```
 
@@ -46,7 +46,7 @@ cat >"$TMP/bad.md" <<'EOF'
 ```mermaid
 %%{init: {'theme': 'base'}}%%
 flowchart LR
-    subgraph S1["沒有透明底"]
+    subgraph 現場["沒有透明底"]
         A["節點"]:::card
     end
     classDef card fill:#FFFFFF,color:#1E293B
