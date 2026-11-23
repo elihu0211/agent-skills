@@ -1,0 +1,61 @@
+{
+  "skill": "draw-mermaid-diagrams",
+  "cases": [
+    {
+      "id": "fix-dark-mode-subgraph-clash",
+      "query": "這份 docs/architecture.md 裡的 Mermaid 架構圖在暗黑模式出現紫色底配藍字標題看不清楚，幫我優化。",
+      "expected_behavior": [
+        "為每個 subgraph 加上 fill:transparent 搭配語意色 stroke 邊框",
+        "使用 YAML frontmatter 宣告 look: neo，不寫死 theme 或文字背景色碼",
+        "執行 lint_mermaid.py 驗證通過"
+      ],
+      "setup": {
+        "files": {
+          "docs/architecture.md": "# 架構\n\n```mermaid\nflowchart TB\n    subgraph S1[\"接入層\"]\n        A[API] --> B[(DB)]\n    end\n```\n"
+        }
+      }
+    },
+    {
+      "id": "fix-hardcoded-base-theme-er",
+      "query": "docs/db.md 的 Mermaid ER 圖寫死了 theme: base 跟黑字色碼，切到暗黑模式整張黑字配黑底看不到字，請修正。",
+      "expected_behavior": [
+        "移除舊版 %%{init:...}%% 與寫死的 theme: base、themeVariables 色碼",
+        "改用 YAML frontmatter look: neo，交由閱讀器自動切換深／淺色主題",
+        "執行 lint_mermaid.py 確認零違規"
+      ],
+      "setup": {
+        "files": {
+          "docs/db.md": "# 資料庫\n\n```mermaid\n%%{init: {'theme': 'base', 'themeVariables': {'primaryTextColor': '#1E293B'}}}%%\nerDiagram\n    users ||--o{ orders : \"下單\"\n```\n"
+        }
+      }
+    },
+    {
+      "id": "draw-modern-sequence-diagram",
+      "query": "幫我在 docs/flow.md 畫一張現代風格的 Mermaid 時序圖，呈現 API 驗證、寫入資料庫與失敗回傳，要在深淺色模式都清楚。",
+      "expected_behavior": [
+        "使用 YAML frontmatter look: neo 與 sequenceDiagram 搭配 autonumber 與 alt／else",
+        "不使用 rect rgb(...) 填色或寫死字色背景色",
+        "執行 lint_mermaid.py 驗證通過"
+      ],
+      "setup": {
+        "files": {
+          "docs/flow.md": "# 呼叫流程\n"
+        }
+      }
+    },
+    {
+      "id": "audit-all-mermaid-docs",
+      "query": "把專案裡所有 Markdown 文件的 Mermaid 流程圖、時序圖跟 ER 圖統一檢查並修成支援深淺色自動切換的現代寫法。",
+      "expected_behavior": [
+        "以 lint_mermaid.py 掃描並列出所有違規區塊",
+        "修正所有寫死色碼、舊版 init 與未設透明底的 subgraph",
+        "重跑 lint_mermaid.py 確認回傳 0 錯誤"
+      ],
+      "setup": {
+        "files": {
+          "docs/api.md": "# API\n\n```mermaid\nflowchart LR\n    subgraph Edge[\"邊緣\"]\n        G[Gateway] --> A[API]\n    end\n```\n"
+        }
+      }
+    }
+  ]
+}
