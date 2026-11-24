@@ -16,6 +16,7 @@ from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.oxml.ns import qn
 from pptx.util import Inches, Pt
 
+from .measure import line_height, wrap_count
 from .spec import as_lines
 from .theme import Theme
 
@@ -234,6 +235,14 @@ def pill(
     return sh
 
 
+# 卡片文字的行距倍數與段距：`card` 排版與 `card_text_height` 估高共用，改一處兩邊同步。
+_TITLE_SPACING = 1.12
+_EN_SPACING = 1.05
+_BODY_SPACING = 1.14
+_EN_RATIO = 0.70  # 英文名稱字級對標題字級的比
+_PARA_GAP = 3.0  # 段與段的間距（pt）
+
+
 def card(
     t: Theme,
     slide: Any,
@@ -251,11 +260,13 @@ def card(
     pad_x: float = 0.13,
     pad_y: float = 0.08,
     en: str | None = None,
+    pad_top: float | None = None,
 ) -> Any:
     """繪製單一語義卡片：圓角、細線、語義強調色。
 
     `en` 是標題下一行較小的英文名稱（中英並列的專有名詞，如「生產系譜」下的 Production Genealogy）：
     字級約標題的七成、不加粗、灰字（深底卡片用內文色），與標題之間不留段距。
+    `pad_top` 單獨指定上邊界（英吋），預設同 `pad_y`；卡片上緣疊著徽章時，用它把文字推到徽章下方。
     """
     spec = t.cards.get(kind, t.cards["gray"])
     sh = _rounded(t, slide, x, y, w, h, spec.fill, spec.line, spec.weight)
@@ -263,28 +274,58 @@ def card(
     tf.word_wrap = True
     tf.vertical_anchor = valign
     tf.margin_left = tf.margin_right = Inches(pad_x)
-    tf.margin_top = tf.margin_bottom = Inches(pad_y)
+    tf.margin_top = Inches(pad_y if pad_top is None else pad_top)
+    tf.margin_bottom = Inches(pad_y)
 
     items = as_lines(body)
     if title:
         p0 = tf.paragraphs[0]
         p0.alignment = PP_ALIGN.LEFT
-        p0.space_after = Pt(3 if items and not en else 0)
-        p0.line_spacing = 1.12
+        p0.space_after = Pt(_PARA_GAP if items and not en else 0)
+        p0.line_spacing = _TITLE_SPACING
         runs(t, p0, title, tfs, spec.head, bold=True)
         if en:
             pe = tf.add_paragraph()
             pe.alignment = PP_ALIGN.LEFT
-            pe.space_after = Pt(3 if items else 0)
-            pe.line_spacing = 1.05
-            runs(t, pe, en, round(tfs * 0.70 * 2) / 2, spec.ink if kind == "solid_dark" else t.muted, bold=False)
+            pe.space_after = Pt(_PARA_GAP if items else 0)
+            pe.line_spacing = _EN_SPACING
+            runs(t, pe, en, round(tfs * _EN_RATIO * 2) / 2, spec.ink if kind == "solid_dark" else t.muted, bold=False)
     for i, item in enumerate(items):
         p = tf.paragraphs[0] if (i == 0 and not title) else tf.add_paragraph()
         p.alignment = PP_ALIGN.LEFT
-        p.space_after = Pt(3 if i < len(items) - 1 else 0)
-        p.line_spacing = 1.14
+        p.space_after = Pt(_PARA_GAP if i < len(items) - 1 else 0)
+        p.line_spacing = _BODY_SPACING
         runs(t, p, ("・" + item) if bullet else item, bfs, spec.ink, bold=False)
     return sh
+
+
+def card_text_height(
+    t: Theme,
+    w: float,
+    title: str,
+    body: str | Sequence[str] | None = None,
+    tfs: float = 16.0,
+    bfs: float = 13.0,
+    bullet: bool = False,
+    pad_x: float = 0.13,
+    en: str | None = None,
+) -> float:
+    """`card` 以這些參數排版後，文字佔的高度（英吋）；折行與段距照 `card` 的規則估，偏保守。"""
+    inner = w - 2 * pad_x
+    items = as_lines(body)
+    lh = lambda size, spacing: line_height(size, t.type.line_em, spacing)
+    total = 0.0
+    if title:
+        total += wrap_count(title, tfs * (1 + t.lint.bold_extra), inner) * lh(tfs, _TITLE_SPACING)
+        total += _PARA_GAP / 72.0 if items and not en else 0.0
+        if en:
+            en_size = round(tfs * _EN_RATIO * 2) / 2
+            total += wrap_count(en, en_size, inner) * lh(en_size, _EN_SPACING)
+            total += _PARA_GAP / 72.0 if items else 0.0
+    for i, item in enumerate(items):
+        total += wrap_count(("・" + item) if bullet else item, bfs, inner) * lh(bfs, _BODY_SPACING)
+        total += _PARA_GAP / 72.0 if i < len(items) - 1 else 0.0
+    return total
 
 
 # ---- 版面分割與疊放 ----

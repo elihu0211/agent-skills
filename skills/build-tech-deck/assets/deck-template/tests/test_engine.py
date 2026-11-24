@@ -326,6 +326,49 @@ def test_node_en_is_a_smaller_line_under_the_title(build_spec: Build) -> None:
     assert not en.runs[0].font.bold
 
 
+def _badged_node(**kw: Any) -> dict[str, Any]:
+    """四欄三列、有欄標題、區塊高 4.35 吋的圖裡放一個帶徽章的節點：卡片高約 1.08 吋，是最緊的常見尺寸。"""
+    return {"id": "n", "col": 0, "row": 0, "title": "現場系統與閘道", "badge": "第二期", "kind": "blue", **kw}
+
+
+def _graph(node: dict[str, Any]) -> dict[str, Any]:
+    return {"nodes": [node], "cols": 4, "rows": 3, "h": 4.35, "col_headers": ["甲", "乙", "丙", "丁"]}
+
+
+def _card_of(out: Path, node: dict[str, Any]) -> Any:
+    return _shape(out, 2, lambda sh: sh.has_text_frame and sh.text_frame.text.startswith(node["title"]))
+
+
+def test_badge_overlapping_the_title_is_reported(build_spec: Build) -> None:
+    """標題、英文名稱與兩行說明共四行，卡片放不下就停在建置時，不讓徽章蓋住標題。"""
+    node = _badged_node(en="Field Systems & Gateway", sub="具 REST 的系統直連\n其餘經 nDAS 6000")
+    with pytest.raises(SpecError, match=r"「現場系統與閘道」.*徽章.*英文名稱"):
+        build_spec(one_slide([("arch_graph", _graph(node))]))
+
+
+def test_badge_leaves_a_card_with_room_untouched(build_spec: Build) -> None:
+    """文字離上緣夠遠，徽章不影響排版：上邊界維持原本的內縮。"""
+    node = _badged_node(sub="具 REST 的系統直連\n其餘經 nDAS 6000")
+    out = build_spec(one_slide([("arch_graph", _graph(node))]))
+    tf = _card_of(out, node).text_frame
+    assert tf.margin_top == tf.margin_bottom
+
+
+def test_badge_pushes_tight_text_below_itself(build_spec: Build) -> None:
+    """文字放得下、但置中時會碰到徽章：整塊往下推到剛好離開徽章，下方仍留在卡片內。"""
+    node = _badged_node(sub="具 REST 的系統直連\n其餘經 nDAS 6000", bfs=13)
+    out = build_spec(one_slide([("arch_graph", _graph(node))]))
+    tf = _card_of(out, node).text_frame
+    assert tf.margin_top > tf.margin_bottom
+
+
+def test_numbered_flow_step_reports_text_under_its_badge(build_spec: Build) -> None:
+    """流程圖的圓形序號壓在方塊左上角，方塊太矮放不下文字時一樣停在建置時。"""
+    items = [{"title": "一二三四五六", "body": ["第一行", "第二行", "第三行", "第四行"], "kind": "blue"}]
+    with pytest.raises(SpecError, match="徽章"):
+        build_spec(one_slide([("flow", {"items": items, "numbered": True, "h": 1.0})]))
+
+
 _REFS = [  # 示例書目：夠長，在版心寬裡會折成兩行
     (
         "Example, A., & Sample, B. (2026). A deliberately long reference title that runs past the right margin "

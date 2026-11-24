@@ -30,6 +30,7 @@ from .draw import (
     badge_fill,
     card,
     card_stack,
+    card_text_height,
     cell_border,
     edge_overlay,
     kind_head,
@@ -48,6 +49,29 @@ from .spec import SpecError, as_lines, check_table
 from .theme import Theme
 
 _ALIGN = {"left": PP_ALIGN.LEFT, "center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT}
+
+_BADGE_GAP = 0.02  # 徽章與卡片文字之間至少留的空白（英吋）
+_PILL_H = 0.22  # 跨在卡片上緣的膠囊徽章高，一半壓進卡片
+_DOT_D = 0.25  # 圓形序號徽章直徑
+
+
+def _pad_top_below_badge(
+    t: Theme, what: str, w: float, h: float, drop: float, pad_x: float, pad_y: float, **text: Any
+) -> float | None:
+    """卡片上緣疊著徽章、徽章伸進卡片 `drop` 英吋時，文字框該用的上邊界（英吋）；不必調整回傳 None。
+
+    垂直置中的文字離上緣原本是（卡高 − 文字高）／2：夠遠就維持原樣；不夠就把整塊文字推到剛好離開徽章。
+    推了仍放不下就停在建置時，讓作者少放一行或加高，不把標題交給徽章蓋住。`text` 是 `card_text_height` 的文字參數。
+    """
+    need = card_text_height(t, w, pad_x=pad_x, **text)
+    clear = drop + _BADGE_GAP
+    if need + clear + pad_y > h:
+        raise SpecError(
+            f"{what}放不下徽章：文字約 {need:.2f} 吋，徽章占掉卡片上緣 {clear:.2f} 吋，只剩 {h - clear - pad_y:.2f} 吋。"
+            "少放一行（如拿掉英文名稱 en）、縮短說明，或加高區塊（h）。"
+        )
+    gap = (h - need) / 2
+    return None if gap >= clear else pad_y + 2 * (clear - gap)
 
 
 def banner(
@@ -123,6 +147,21 @@ def flow(
     tfs = 16.0 if n <= 4 else (14.5 if n == 5 else 13.5)
     bfs = 12.5 if n <= 4 else (11.5 if n == 5 else 11.0)
     for i, ((x, cw), it) in enumerate(zip(split(t.layout.left, t.layout.width, n, gap), items, strict=True)):
+        pad_top = None
+        if numbered:  # 序號圓點壓在方塊左上角，往下伸進方塊
+            pad_top = _pad_top_below_badge(
+                t,
+                f"步驟「{it['title']}」",
+                cw,
+                box_h,
+                0.04 + _DOT_D / 2,
+                0.10,
+                0.08,
+                title=it["title"],
+                body=it.get("body"),
+                tfs=tfs,
+                bfs=bfs,
+            )
         card(
             t,
             slide,
@@ -138,6 +177,7 @@ def flow(
             bullet=False,
             valign=MSO_ANCHOR.MIDDLE,
             pad_x=0.10,
+            pad_top=pad_top,
         )
         if numbered:
             is_dark = it.get("kind") == "solid_dark"
@@ -150,7 +190,7 @@ def flow(
                 fill=t.white if is_dark else t.ink,
                 ink=t.ink if is_dark else t.white,
                 line_color=t.ink,
-                d=0.25,
+                d=_DOT_D,
                 fs=t.type.label,
             )
         if i < n - 1:
@@ -262,6 +302,19 @@ def swimlane(
     for k, st in enumerate(steps):
         sx, sy, _ = coords[k]
         kind = st.get("kind", "dark")
+        pad_top = _pad_top_below_badge(  # 序號圓點的圓心在方塊左上角，一半伸進方塊
+            t,
+            f"步驟「{st['title']}」",
+            bw,
+            bh,
+            _DOT_D / 2,
+            0.08,
+            0.04,
+            title=st["title"],
+            body=st.get("sub"),
+            tfs=13.5,
+            bfs=11.0,
+        )
         card(
             t,
             slide,
@@ -278,6 +331,7 @@ def swimlane(
             valign=MSO_ANCHOR.MIDDLE,
             pad_x=0.08,
             pad_y=0.04,
+            pad_top=pad_top,
         )
         is_solid = kind == "solid_dark"
         fill = badge_fill(t, kind)
@@ -290,7 +344,7 @@ def swimlane(
             fill=fill,
             ink=t.ink if is_solid else t.white,
             line_color=t.ink if is_solid else fill,
-            d=0.25,
+            d=_DOT_D,
             fs=t.type.label,
         )
 
@@ -389,6 +443,20 @@ def arch_graph(
             ny += 0.06
             nh -= 0.12
         node_boxes[nd["id"]] = (nx, ny, nw, nh)
+        b_str = str(nd["badge"]) if nd.get("badge") else ""
+        b_kind = nd.get("kind", "dark")
+        text = {
+            "title": nd["title"],
+            "body": nd.get("sub"),
+            "tfs": nd.get("tfs", 14.5 if not has_side else 13.5),
+            "bfs": nd.get("bfs", 11.8 if not has_side else 11.2),
+            "bullet": nd.get("bullet", False),
+            "en": nd.get("en"),
+        }
+        pad_top = None
+        if b_str:
+            drop = (0.02 + _DOT_D / 2) if len(b_str) <= 2 else _PILL_H / 2
+            pad_top = _pad_top_below_badge(t, f"節點「{nd['title']}」", nw, nh, drop, 0.10, 0.06, **text)
         card(
             t,
             slide,
@@ -397,19 +465,13 @@ def arch_graph(
             nw,
             nh,
             nd.get("kind", "gray"),
-            nd["title"],
-            nd.get("sub"),
-            tfs=nd.get("tfs", 14.5 if not has_side else 13.5),
-            bfs=nd.get("bfs", 11.8 if not has_side else 11.2),
-            bullet=nd.get("bullet", False),
             valign=MSO_ANCHOR.MIDDLE,
             pad_x=0.10,
             pad_y=0.06,
-            en=nd.get("en"),
+            pad_top=pad_top,
+            **text,
         )
-        if nd.get("badge"):
-            b_str = str(nd["badge"])
-            b_kind = nd.get("kind", "dark")
+        if b_str:
             if len(b_str) <= 2:
                 badge(
                     t,
@@ -419,12 +481,12 @@ def arch_graph(
                     b_str,
                     fill=badge_fill(t, b_kind),
                     ink=t.ink if b_kind == "solid_dark" else t.white,
-                    d=0.25,
+                    d=_DOT_D,
                     fs=t.type.label,
                 )
             else:
                 pw = max(0.62, min(nw - 0.16, 0.16 + 0.11 * sum(1.35 if ord(c) > 127 else 0.72 for c in b_str)))
-                pill(t, slide, nx + 0.06, ny - 0.11, pw, 0.22, b_str, kind=pill_kind(b_kind), fs=9.0)
+                pill(t, slide, nx + 0.06, ny - _PILL_H / 2, pw, _PILL_H, b_str, kind=pill_kind(b_kind), fs=9.0)
 
     # 3. 繪製有向邊與邊標籤
     for ed in edges or []:
