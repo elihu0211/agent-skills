@@ -2,11 +2,17 @@
 
 PowerPoint 開檔再另存是唯一能忠實呈現 PingFang TC 與圓角形狀的路徑；沒有 PowerPoint 的環境只能出 `.pptx`。
 匯出失敗或逾時以 `ExportError` 停下，不是警告後繼續。多個行程同時匯出時以檔案鎖串行，不會互相關掉對方的文件。
+
+PowerPoint 以檔名辨認開著的簡報：使用者若開著同名的 `.pptx`（同一份或別的資料夾），`open` 不會重讀磁碟上的
+新內容，`presentation 名稱` 也會指到使用者那份，結果匯出舊內容，還把使用者的簡報不存檔關掉。所以匯出前先在同一個
+資料夾複製一份唯一檔名的副本，只開、只存、只關這份副本，結束後刪掉；同資料夾也沿用 PowerPoint 已有的檔案存取權。
 """
 
 from __future__ import annotations
 
 import fcntl
+import secrets
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -14,7 +20,7 @@ from pathlib import Path
 EXPORT_TIMEOUT_S = 180  # 整個 AppleScript 的上限；PowerPoint 開檔的輪詢上限（20 秒）在腳本內
 
 # 路徑與檔名以 argv 傳入，不拼進腳本字串（路徑含引號或空白也安全）。只關自己開的那份：
-# 以檔名取得 presentation，使用者已開著的其他簡報不受影響。
+# 以副本的唯一檔名取得 presentation，使用者已開著的簡報（含同名的）不受影響。
 _SCRIPT = """
 on run argv
     set pptxFile to POSIX file (item 1 of argv)
@@ -63,8 +69,11 @@ def _hint(stderr: str) -> str:
 def export_pdf(pptx: Path, pdf: Path) -> None:
     """用 PowerPoint 匯出向量 PDF；失敗丟 `ExportError`。"""
     pdf.unlink(missing_ok=True)
-    argv = [str(pptx.resolve()), str(pdf.resolve()), pptx.name]
+    pptx = pptx.resolve()
+    copy = pptx.with_name(f"deckstyle-export-{secrets.token_hex(6)}{pptx.suffix}")
+    argv = [str(copy), str(pdf.resolve()), copy.name]
     lock = Path(tempfile.gettempdir()) / "deckstyle-powerpoint-export.lock"
+    shutil.copyfile(pptx, copy)
     try:
         with lock.open("w") as fh:
             fcntl.flock(fh, fcntl.LOCK_EX)
@@ -81,8 +90,10 @@ def export_pdf(pptx: Path, pdf: Path) -> None:
     except subprocess.TimeoutExpired:
         raise ExportError(
             f"PowerPoint 匯出 {pptx.name} 逾時（{EXPORT_TIMEOUT_S} 秒）：確認 PowerPoint 沒有卡在對話框，"
-            "並關掉它殘留開著的這份簡報後重試。"
+            f"並關掉它殘留開著的 {copy.name} 後重試。"
         ) from None
+    finally:
+        copy.unlink(missing_ok=True)
     if run.returncode != 0:
         stderr = run.stderr.strip()
         raise ExportError(
