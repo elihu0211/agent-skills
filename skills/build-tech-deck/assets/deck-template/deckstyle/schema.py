@@ -35,7 +35,8 @@ _SCALAR: dict[str, Any] = {"oneOf": [_STR, _INT, _NUM]}
 # 欄位名稱 → 型別。同名欄位在不同區塊型別不同時，用 _BLOCK_TYPES[(區塊, 欄位)] 覆寫。
 _TYPES: dict[str, dict[str, Any]] = {
     **dict.fromkeys(
-        ("title", "sub", "caption", "label", "time", "name", "id", "from", "to", "image", "alt", "fmt", "value"), _STR
+        ("title", "sub", "en", "caption", "label", "time", "name", "id", "from", "to", "image", "alt", "fmt", "value"),
+        _STR,
     ),
     **dict.fromkeys(("h", "tfs", "bfs", "side_w", "cap_h", "crop", "left_w", "ratio", "vmin", "vmax", "size"), _NUM),
     **dict.fromkeys(("lane", "col", "row", "col_span", "row_span", "cols", "rows"), _INT),
@@ -62,6 +63,7 @@ _BLOCK_TYPES: dict[tuple[str, str], dict[str, Any]] = {
     ("arch_graph", "rows"): _INT,
     ("columns", "items"): _STRS,  # columns 的 items 在欄位元素層：條列
     ("kpi", "sub"): _TEXT,
+    ("references", "items"): {**_STRS, "minItems": 1},  # 每筆書目一個字串，自動折行
 }
 
 

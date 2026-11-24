@@ -64,12 +64,12 @@ slides:
     rows: 2
     col-headers: [現場, 雲端服務, 資料留存]
     nodes:
-    - {id: tm, col: 0, row: 0, kind: dark, title: 掃碼終端, sub: 機台碼＋工單碼}
-    - {id: ev, col: 1, row: 0, kind: green, title: 事件接收, sub: 驗簽並寫入流水}
-    - {id: st, col: 2, row: 0, kind: blue, title: 事件流水, sub: 只增不改}
-    - {id: op, col: 0, row: 1, kind: amber, title: 人工補掃, sub: 網路中斷時暫存}
-    - {id: rl, col: 1, row: 1, kind: green, title: 規則判定, sub: 撞單、跳站即時攔截}
-    - {id: rp, col: 2, row: 1, kind: red, title: 異常待審, sub: 須主管判斷}
+    - {id: tm, col: 0, row: 0, kind: dark, title: 掃碼終端, en: Scan Terminal, sub: 機台碼＋工單碼}
+    - {id: ev, col: 1, row: 0, kind: green, title: 事件接收, en: Event Intake, sub: 驗簽並寫入流水}
+    - {id: st, col: 2, row: 0, kind: blue, title: 事件流水, en: Event Log, sub: 只增不改}
+    - {id: op, col: 0, row: 1, kind: amber, title: 人工補掃, en: Manual Rescan, sub: 網路中斷時暫存}
+    - {id: rl, col: 1, row: 1, kind: green, title: 規則判定, en: Rule Check, sub: 撞單、跳站即時攔截}
+    - {id: rp, col: 2, row: 1, kind: red, title: 異常待審, en: Exception Review, sub: 須主管判斷}
     edges:
     - {from: tm, to: ev, kind: forward, label: 掃碼}
     - {from: ev, to: st, kind: green, label: 寫入}
@@ -248,4 +248,13 @@ slides:
   - block: note
     lines: [下一步：核准試點預算，兩週內開始單線驗證]
   notes: 講稿：結論頁停留給提問；風險要附對策。
+- ref: 12 參考文獻 · References
+  title: 參考文獻
+  blocks:
+  - block: references
+    title: APA 第 7 版，依第一作者字母排序
+    items:
+    - "International Society of Automation. (2010). Enterprise-control system integration — Part 1: Models and terminology (ANSI/ISA-95.00.01-2010). ISA."
+    - "International Society of Automation. (2013). Enterprise-control system integration — Part 3: Activity models of manufacturing operations management (ANSI/ISA-95.00.03-2013). ISA."
+  notes: 講稿：書目照原文寫成一整行，折行與懸掛縮排交給引擎。
 - {type: closing, title: 謝謝，歡迎提問, sub: 下一步：核准試點預算，兩週內開始單線驗證, meta: 歡迎來信討論, notes: 結語頁停留給提問。}

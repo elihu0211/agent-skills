@@ -94,7 +94,7 @@ class Frame:
 
 @dataclass(frozen=True)
 class Type:
-    """字級（pt）。"""
+    """字級（pt）與單倍行高。"""
 
     cover_category: float
     cover_title: float
@@ -112,6 +112,7 @@ class Type:
     label: float
     kpi_value: float
     body: float
+    line_em: float  # PowerPoint 的單倍行高（em），不是字級
 
 
 @dataclass(frozen=True)

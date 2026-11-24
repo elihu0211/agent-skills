@@ -40,6 +40,34 @@ class SpecError(ValueError):
     """簡報規格有誤；訊息說明哪裡錯、該怎麼改。"""
 
 
+# 會畫成文字的欄位：值須是字串，不然畫到一半才 TypeError。TEXT_MANY 另收字串清單（多行或條列）。
+TEXT_ONE = ("title", "subtitle", "category", "short_title", "ref", "meta", "caption", "label", "time", "name", "alt")
+TEXT_ONE += ("value", "en")
+TEXT_MANY = ("sub", "body", "items", "lines", "edge_labels", "col_headers", "notes")
+_YAML_HINT = (
+    "：YAML 會把沒加引號的 2026、3.5、true 讀成數字或布林；方括號清單 [a, b] 以半形逗號分項，"
+    "文字裡有半形逗號（如「Lin & Huang, 2026」）就整段加引號"
+)
+
+
+def check_text(where: str, field: str, value: Any) -> None:
+    """會畫成文字的欄位須是字串（TEXT_MANY 也收字串清單，選填留空可為 null）；其他欄位不在這裡管。"""
+    if field not in TEXT_ONE and field not in TEXT_MANY:
+        return
+    many = field in TEXT_MANY
+    if isinstance(value, str) or (many and value is None):
+        return
+    if many and isinstance(value, list):
+        for i, v in enumerate(value):
+            if not isinstance(v, str):
+                raise SpecError(
+                    f"{where}：{kebab(field)} 第 {i + 1} 項須為字串，拿到 {v!r}（{type(v).__name__}）{_YAML_HINT}"
+                )
+        return
+    want = "字串或字串清單" if many else "字串"
+    raise SpecError(f"{where}：{kebab(field)} 須為{want}，拿到 {value!r}（{type(value).__name__}）{_YAML_HINT}")
+
+
 def kebab(name: str) -> str:
     """內部 snake_case → 使用者寫的 kebab-case（訊息與 schema 用）。"""
     return name.replace("_", "-")
@@ -108,7 +136,7 @@ BLOCK_SCHEMA: dict[str, dict[str, Any]] = {
         "lists": {
             "nodes": {
                 "req": ("id", "col", "row", "title"),
-                "opt": ("kind", "sub", "col_span", "row_span", "inset", "badge", "tfs", "bfs", "bullet"),
+                "opt": ("kind", "sub", "en", "col_span", "row_span", "inset", "badge", "tfs", "bfs", "bullet"),
                 "kinds": ("kind",),
             },
             "edges": {"req": ("from", "to"), "opt": ("kind", "label"), "enums": {"kind": EDGE_KINDS}},
@@ -187,6 +215,7 @@ BLOCK_SCHEMA: dict[str, dict[str, Any]] = {
             "side": _TXT,
         },
     },
+    "references": {"req": ("items",), "opt": ("title", "size", "h")},
     "note": {"req": ("lines",), "opt": ("size", "bold")},
 }
 
@@ -212,6 +241,9 @@ def _check(where: str, obj: Mapping[str, Any], schema: Mapping[str, Any]) -> Non
     """依欄位表檢查一個物件（含巢狀的元素列表）。"""
     lists = schema.get("lists", {})
     _keys(where, obj, schema.get("req", ()), schema.get("opt", ()))
+    for field, value in obj.items():
+        if field not in lists:
+            check_text(where, field, value)
     for field in schema.get("kinds", ()):
         if field in obj and obj[field] not in KINDS:
             raise SpecError(f"{where}：{kebab(field)}={obj[field]!r} 不是合法的 kind（可用：{', '.join(KINDS)}）")
@@ -303,6 +335,9 @@ def validate(spec: Mapping[str, Any]) -> None:
             "規格缺作者（author）：寫在 deck.yml，或放進上層的 _quarto.yml／_metadata.yml 並用 deckstyle build 分層合併"
         )
     _keys("規格", spec, TOP_REQUIRED, TOP_OPTIONAL)
+    for field in ("title", "subtitle", "category", "short_title", "meta", "notes"):
+        if field in spec:
+            check_text("規格", field, spec[field])
     from .config import normalize_authors  # 延後匯入：config 也匯入本檔的 SpecError
 
     normalize_authors(spec["author"])
@@ -317,7 +352,9 @@ def validate(spec: Mapping[str, Any]) -> None:
     for n, page in enumerate(slides_of(spec), 2):
         where = f"第 {n} 頁「{page['title']}」"
         if not isinstance(page["title"], str) or not page["title"].strip():
-            raise SpecError(f"第 {n} 頁：主標題不可空白")
+            raise SpecError(f"第 {n} 頁：主標題不可空白，須為字串：{page['title']!r}")
+        for field in ("ref", "sub", "meta", "notes"):
+            check_text(where, field, page[field])
         if page["type"] != "content":
             continue
         if not page["blocks"]:
