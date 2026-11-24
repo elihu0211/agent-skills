@@ -116,6 +116,18 @@ def _page(*blocks_: dict[str, Any], title: str = "t") -> dict[str, Any]:
             _page({"block": "chart", "categories": ["a"], "series": [{"name": "s", "values": [1]}], "type": "radar"}),
             "type",
         ),
+        (
+            _page({"block": "note", "lines": ["見（Lin & Huang", 2026, "§3.2）"]}),
+            r"lines 第 2 項須為字串.*2026.*半形逗號",
+        ),
+        (_page({"block": "kpi", "items": [{"value": 40, "label": "件數"}]}), r"items\[1\]：value 須為字串"),
+        (_page({"block": "cards", "items": [{"title": True}]}), "title 須為字串"),
+        (_page({"block": "references", "items": ["a", 3]}), "items 第 2 項須為字串"),
+        (
+            _bad(slides=[{"title": "t", "notes": 3, "blocks": [{"block": "note", "lines": ["x"]}]}]),
+            "notes 須為字串或字串清單",
+        ),
+        (_bad(subtitle=2026), "subtitle 須為字串"),
         (_bad(lint={"deny": "shop"}), "字串清單"),
         (_bad(lint={"bogus": []}), "未知欄位 bogus"),
     ],

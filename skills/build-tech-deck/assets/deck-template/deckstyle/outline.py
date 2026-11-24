@@ -105,6 +105,9 @@ def _block(kind: str, kw: Mapping[str, Any]) -> str:
             if kw.get("side"):
                 out.append(_titled(kw["side"]))
             return "\n\n".join(out)
+        case "references":
+            head = [f"**{kw['title']}**"] if kw.get("title") else []
+            return "\n\n".join([*head, "\n".join(f"- {r}" for r in as_lines(kw["items"]))])
         case "note":
             return "_" + "".join(kw["lines"]) + "_"
     raise SpecError(f"簡報規格含未知區塊：{kind}")

@@ -43,6 +43,7 @@ from .draw import (
     split,
     text_box,
 )
+from .measure import REFLOW, line_height, wrap_count
 from .spec import SpecError, as_lines, check_table
 from .theme import Theme
 
@@ -404,6 +405,7 @@ def arch_graph(
             valign=MSO_ANCHOR.MIDDLE,
             pad_x=0.10,
             pad_y=0.06,
+            en=nd.get("en"),
         )
         if nd.get("badge"):
             b_str = str(nd["badge"])
@@ -679,6 +681,56 @@ def _cell_text(cell: Any) -> str:
     return cell[0] if isinstance(cell, list) else str(cell)
 
 
+_CELL_PAD_X, _CELL_PAD_Y = 0.10, 0.04  # 儲存格左右、上下內距（英吋）
+_CELL_SPACING = 1.15  # 儲存格段落的行距倍數
+_HEAD_SIZE = 13.0  # 首列字級
+_BIG_ROW = 0.56  # 基準列高達此值用 13.5 pt，否則 12.5 pt
+
+
+def _row_need(t: Theme, row: Sequence[Any], widths: Sequence[float], size: float, bold: bool) -> float:
+    """一列放得下它最多行的儲存格所需的高度（英吋）：明確換行與（lint 會擋的）自動折行都算進去。"""
+    lines = max(
+        wrap_count(_cell_text(c), size * (1 + t.lint.bold_extra if bold or isinstance(c, list) else 1.0), w)
+        for c, w in zip(row, widths, strict=True)
+    )
+    return lines * line_height(size, t.type.line_em, _CELL_SPACING) + 2 * _CELL_PAD_Y
+
+
+def table_rows(
+    t: Theme,
+    rows: Sequence[Sequence[Any]],
+    col_w: Sequence[float],
+    height: float,
+    highlight: set[int] | None = None,
+) -> tuple[float, list[float]]:
+    """回傳（內文字級, 每列高度）。
+
+    基準列高照列數均分 `height`（至多 t.limits.row_max_h）；放不下內容的列（儲存格有兩三行）撐高到剛好放得下。
+    撐高後總高超過 `height` 時壓低基準列高，讓整張表仍在 `height` 內；基準列高低於 0.56 吋時內文改用 12.5 pt 重算。
+    連每列都只留內容所需還放不下，就照所需高度回傳，由頁面的溢出檢查回報。
+    """
+    nr = len(rows)
+    scale = t.layout.width / sum(col_w)
+    widths = [w * scale - 2 * _CELL_PAD_X for w in col_w]
+    start = min(t.limits.row_max_h, height / nr)
+    for size in (13.5, 12.5):
+        need = [
+            _row_need(t, r, widths, _HEAD_SIZE if i == 0 else size, i == 0 or bool(highlight and i in highlight))
+            for i, r in enumerate(rows)
+        ]
+        lo, hi = 0.0, start  # 基準列高 b 越小總高越小：二分找放得進 height 的最大 b
+        if sum(max(hi, n) for n in need) > height:
+            for _ in range(40):
+                mid = (lo + hi) / 2
+                lo, hi = (mid, hi) if sum(max(mid, n) for n in need) <= height else (lo, mid)
+            base = lo
+        else:
+            base = hi
+        if base >= _BIG_ROW or size == 12.5:
+            return size, [max(base, n) for n in need]
+    raise AssertionError("unreachable")
+
+
 def table(
     t: Theme,
     slide: Any,
@@ -693,16 +745,17 @@ def table(
     """現代專業細線表格：首列墨底白字，奇偶行白／淺灰交錯，細框線。
 
     儲存格可寫字串，或 `(字串, kind)` 做語義高亮（kind：green、red、blue、amber，字色隨語義、粗體）。
-    `aligns` 每欄一個 left／center／right；`h` 固定整張表的高度（省略則依列數自動，單列至多 t.limits.row_max_h）。
+    `aligns` 每欄一個 left／center／right；`h` 是整張表的高度上限（省略則用可用高度）。列高見 `table_rows`：
+    單行的列等高，有兩三行的列撐高到放得下，總高照實際列高加總，所以置中與結論列的位置都算得準。
+    每列只留一行字的高度還放不進 `h` 時照所需高度畫，頁面放不下才由溢出檢查報錯。
     """
     check_table(rows, col_w)
     if h is not None:
         height = h
     nr, nc = len(rows), len(rows[0])
-    row_h = min(t.limits.row_max_h, height / nr)
-    size = 13.5 if row_h >= 0.56 else 12.5
+    size, heights = table_rows(t, rows, col_w, height, highlight)
     scale = t.layout.width / sum(col_w)
-    h = row_h * nr
+    h = sum(heights)
     gs = slide.shapes.add_table(nr, nc, Inches(t.layout.left), Inches(y), Inches(t.layout.width), Inches(h))
     alt_text(gs, "表格：" + "、".join(_cell_text(c) for c in rows[0]))
     tbl = gs.table
@@ -712,17 +765,17 @@ def table(
     for j, w in enumerate(col_w):
         tbl.columns[j].width = Inches(w * scale)
     for i in range(nr):
-        tbl.rows[i].height = Inches(row_h)
+        tbl.rows[i].height = Inches(heights[i])
         for j in range(nc):
             c = tbl.cell(i, j)
-            c.margin_left = c.margin_right = Inches(0.10)
-            c.margin_top = c.margin_bottom = Inches(0.04)
+            c.margin_left = c.margin_right = Inches(_CELL_PAD_X)
+            c.margin_top = c.margin_bottom = Inches(_CELL_PAD_Y)
             c.vertical_anchor = MSO_ANCHOR.MIDDLE
             tf = c.text_frame
             tf.word_wrap = True
             p = tf.paragraphs[0]
             p.alignment = _ALIGN[aligns[j]] if aligns else PP_ALIGN.LEFT
-            p.line_spacing = 1.15
+            p.line_spacing = _CELL_SPACING
             head = i == 0
             hl = bool(highlight and i in highlight)
             text, tone = rows[i][j] if isinstance(rows[i][j], list) else (rows[i][j], None)
@@ -731,7 +784,7 @@ def table(
                 t,
                 p,
                 text,
-                13.0 if head else size,
+                _HEAD_SIZE if head else size,
                 text_color,
                 bold=head or hl or tone is not None,
                 keep=tone is not None,
@@ -1110,6 +1163,70 @@ def chart(
     return box_h
 
 
+_REF_SIZE = 14.0  # 參考文獻的預設字級（pt）
+_REF_HANG = 0.40  # 懸掛縮排（英吋）：續行比首行內縮這麼多
+_REF_SPACING = 1.15
+_REF_GAP = 7.0  # 書目之間的段距（pt）
+_REF_TITLE_GAP = 8.0  # 標題列之後的段距（pt）
+
+
+def _references_height(t: Theme, items: Sequence[str], title: str | None, size: float) -> float:
+    """參考文獻區塊的估算高度：每筆依懸掛縮排折行後的行數加總，加上段距與標題列。"""
+    w = t.layout.width
+    lh = line_height(size, t.type.line_em, _REF_SPACING)
+    lines = sum(wrap_count(it, size, w - _REF_HANG, first_in=w) for it in items)
+    h = lines * lh + _REF_GAP / 72.0 * max(0, len(items) - 1)
+    if title:
+        h += line_height(size, t.type.line_em, _REF_SPACING) + _REF_TITLE_GAP / 72.0
+    return h
+
+
+def references(
+    t: Theme,
+    slide: Any,
+    y: float,
+    items: Sequence[str],
+    title: str | None = None,
+    size: float | None = None,
+    height: float = 4.20,
+) -> float:
+    """參考文獻：每筆書目一段、自動折行、懸掛縮排（首行齊左、續行內縮，APA 第 7 版的格式）。
+
+    書目照原文寫成一整行，不手動斷行：折在哪裡由 PowerPoint 依字寬決定，所以不會留下只有一兩個詞的殘行。
+    高度依折行估算（`measure.wrap_count`）；文字框命名為 `measure.REFLOW`，零折行檢查不把它的折行當違規。
+    `title` 是一行灰色小標（如「APA 第 7 版，依第一作者字母排序」）；`size` 預設 14 pt。
+    """
+    size = _REF_SIZE if size is None else size
+    entries = as_lines(items)
+    if not entries:
+        raise SpecError("references 沒有書目")
+    est = _references_height(t, entries, title, size)
+    tb = slide.shapes.add_textbox(Inches(t.layout.left), Inches(y), Inches(t.layout.width), Inches(max(est, 0.3)))
+    tb.name = REFLOW
+    tf = tb.text_frame
+    tf.word_wrap = True
+    tf.margin_left = tf.margin_right = 0
+    tf.margin_top = tf.margin_bottom = 0
+    first = True
+    if title:
+        p = tf.paragraphs[0]
+        p.space_after = Pt(_REF_TITLE_GAP)
+        p.line_spacing = _REF_SPACING
+        runs(t, p, title, size, t.muted, bold=True)
+        first = False
+    for i, text in enumerate(entries):
+        p = tf.paragraphs[0] if first else tf.add_paragraph()
+        first = False
+        p.alignment = PP_ALIGN.LEFT
+        p.line_spacing = _REF_SPACING
+        p.space_after = Pt(_REF_GAP if i < len(entries) - 1 else 0)
+        ppr = p._p.get_or_add_pPr()
+        ppr.set("marL", str(Inches(_REF_HANG)))
+        ppr.set("indent", str(-Inches(_REF_HANG)))
+        runs(t, p, text, size, t.ink)
+    return est
+
+
 BLOCKS = {
     "banner": banner,
     "cards": cards,
@@ -1125,12 +1242,18 @@ BLOCKS = {
     "layers": layers,
     "kpi": kpi,
     "chart": chart,
+    "references": references,
     "note": note,
 }
 
 
 def planned_height(t: Theme, kind: str, kw: dict[str, Any], share: float) -> float:
     """區塊在可用高度 share 下實際會畫多高（置中用）。"""
+    if kind == "table":  # 列高依內容估算，`h` 只是上限
+        if not kw.get("rows") or not kw.get("col_w"):
+            return share  # 空表格由 table() 回報
+        cap = float(kw["h"]) if kw.get("h") is not None else share
+        return sum(table_rows(t, kw["rows"], kw["col_w"], cap, set(kw.get("highlight") or ()))[1])
     if "h" in kw and kw["h"] is not None:
         return float(kw["h"]) + (t.limits.caption_h if kw.get("caption") else 0.0)
     if kind == "banner":
@@ -1147,7 +1270,6 @@ def planned_height(t: Theme, kind: str, kw: dict[str, Any], share: float) -> flo
         return min(share, t.limits.kpi_max_h)
     if kind == "chart":
         return min(share, t.limits.chart_max_h)
-    if kind == "table":
-        nr = len(kw["rows"])  # 空表格由 table() 回報，這裡只防除以零
-        return min(t.limits.row_max_h, share / max(1, nr)) * nr
+    if kind == "references":
+        return _references_height(t, as_lines(kw["items"]), kw.get("title"), kw.get("size") or _REF_SIZE)
     return share

@@ -266,3 +266,93 @@ def test_no_module_level_theme_state() -> None:
         text = (src / name).read_text(encoding="utf-8")
         assert "import theme as T" not in text
         assert not re.search(r"^[A-Z_]+ = T\.", text, re.MULTILINE)
+
+
+# ---- 依內容估算的高度：表格列高、參考文獻 ----
+
+
+def _shape(path: Path, slide_no: int, pred: Callable[[Any], bool]) -> Any:
+    slide = list(Presentation(str(path)).slides)[slide_no - 1]
+    return next(sh for sh in slide.shapes if pred(sh))
+
+
+def test_table_rows_grow_to_fit_multi_line_cells(build_spec: Build, theme: Theme) -> None:
+    """兩三行的儲存格撐高該列、單行的列維持等高；表格總高等於列高加總，單一區塊依實際高度置中。"""
+    rows = [["欄名", "說明"]] + [["一行", "一行"]] * 3 + [["三行", "第一行\n第二行\n第三行"]] + [["一行", "一行"]] * 3
+    out = build_spec(one_slide([("table", {"rows": rows, "col_w": [1, 3]})]))
+    gf = _shape(out, 2, lambda sh: sh.has_table)
+    hs = [r.height for r in gf.table.rows]
+    assert len({hs[i] for i in (1, 2, 3, 5, 6, 7)}) == 1 and hs[1] < hs[4]
+    assert abs(gf.height - sum(hs)) <= 4  # EMU 進位誤差
+    lay = theme.layout
+    centered = Inches(lay.top + (lay.bottom - lay.top - gf.height / 914400) / 2)
+    assert abs(gf.top - centered) < Inches(0.01)
+
+
+def test_table_rows_shrink_to_stay_within_h(build_spec: Build) -> None:
+    rows = [["欄"]] + [[f"第 {i} 列"] for i in range(6)] + [["甲\n乙\n丙"]]
+    out = build_spec(one_slide([("table", {"rows": rows, "col_w": [1], "h": 4.0})]))
+    gf = _shape(out, 2, lambda sh: sh.has_table)
+    hs = [r.height for r in gf.table.rows]
+    assert sum(hs) <= Inches(4.0) + 8 and hs[1] < hs[-1]
+
+
+def test_table_too_tall_for_the_page_is_reported(build_spec: Build) -> None:
+    rows = [["欄"]] + [["一\n二\n三\n四"] for _ in range(8)]
+    with pytest.raises(SpecError, match="超出可用範圍"):
+        build_spec(one_slide([("table", {"rows": rows, "col_w": [1]})]))
+
+
+def test_node_en_is_a_smaller_line_under_the_title(build_spec: Build) -> None:
+    node = {"id": "g", "col": 0, "row": 0, "title": "生產系譜", "en": "Production Genealogy", "sub": "封裝紀錄"}
+    out = build_spec(one_slide([("arch_graph", {"nodes": [node], "cols": 1, "rows": 1})]))
+    card = _shape(out, 2, lambda sh: sh.has_text_frame and "Production Genealogy" in sh.text_frame.text)
+    title, en, sub = card.text_frame.paragraphs
+    assert (title.text, en.text, sub.text) == ("生產系譜", "Production Genealogy", "封裝紀錄")
+    assert en.runs[0].font.size < title.runs[0].font.size
+    assert not en.runs[0].font.bold
+
+
+_REFS = [  # 示例書目：夠長，在版心寬裡會折成兩行
+    (
+        "Example, A., & Sample, B. (2026). A deliberately long reference title that runs past the right margin "
+        "so that the hanging indent shows on the second line. Example Press."
+    ),
+    (
+        "Noy, N. F., & McGuinness, D. L. (2001). Ontology development 101: A guide to creating your first "
+        "ontology (Technical Report KSL-01-05). Stanford Knowledge Systems Laboratory."
+    ),
+]
+
+
+def test_references_hang_and_wrap_without_lint_violations(build_spec: Build) -> None:
+    from deckstyle.lint import lint_wrap
+    from deckstyle.measure import REFLOW
+
+    out = build_spec(one_slide([("references", {"title": "APA 第 7 版", "items": _REFS})]))
+    box = _shape(out, 2, lambda sh: sh.name == REFLOW)
+    head, *entries = box.text_frame.paragraphs
+    assert head.text == "APA 第 7 版" and [p.text for p in entries] == _REFS
+    for p in entries:
+        ppr = p._p.pPr
+        assert int(ppr.get("marL")) == -int(ppr.get("indent")) > 0  # 懸掛縮排：續行內縮、首行齊左
+    assert box.text_frame.word_wrap
+    assert lint_wrap(out) == []
+
+
+def test_references_height_grows_with_wrapped_lines(theme: Theme) -> None:
+    from deckstyle.blocks import planned_height
+
+    one = planned_height(theme, "references", {"items": ["短書目。"]}, 4.0)
+    two = planned_height(theme, "references", {"items": [_REFS[0] * 2]}, 4.0)
+    assert 0 < one < two
+
+
+def test_too_many_references_are_reported(build_spec: Build) -> None:
+    with pytest.raises(SpecError, match="超出可用範圍"):
+        build_spec(one_slide([("references", {"items": _REFS * 8})]))
+
+
+def test_empty_references_are_reported(build_spec: Build) -> None:
+    with pytest.raises(SpecError, match="沒有書目"):
+        build_spec(one_slide([("references", {"items": []})]))

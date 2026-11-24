@@ -1,6 +1,6 @@
 """簡報品質檢查：零折行與白話命名，讀建好的 `.pptx`。
 
-- `lint_wrap`：以字級與字元寬度估算每段文字，找出會折行、孤字或單行過長的段落。全形 1.0 em、半形 0.55 em，
+- `lint_wrap`：以字級與字元寬度估算每段文字，找出會折行、孤字或單行過長的段落。字寬估法見 `measure.py`，
   粗體多估 `bold_extra`；門檻（安全係數、孤字字數）取自設計參數 `design.yml` 的 `lint`。估算不取代轉 PDF 後的逐頁目視。
 - `lint_names`：投影片與講稿備註不得出現讀者看不懂的代碼名稱（snake_case 識別字、檔名、路徑與端點，
   加上各簡報自己在規格 `lint.deny` 列出的倉庫與服務代號）。
@@ -11,7 +11,6 @@
 from __future__ import annotations
 
 import re
-import unicodedata
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,15 +21,10 @@ from pptx.enum.shapes import PP_PLACEHOLDER
 from pptx.util import Emu
 
 from . import design
+from .measure import REFLOW, char_em
 
 DEFAULT_PT = 18.0  # run 沒指定字級時的預設
 _DEFAULT_MARGIN = Emu(91440)  # 文字框沒指定邊距時，PowerPoint 的預設 0.1 英吋
-
-
-def _char_em(ch: str) -> float:
-    if unicodedata.east_asian_width(ch) in ("W", "F"):
-        return 1.0
-    return 0.3 if ch == " " else 0.55
 
 
 @dataclass(frozen=True)
@@ -88,7 +82,7 @@ def _para_width_pt(par: Any, bold_extra: float, base: _Inherited) -> tuple[float
             for k, piece in enumerate(text.replace("\v", "\n").split("\n")):  # run 文字裡的換行字元也是換行
                 if k:
                     lines.append(0.0)
-                lines[-1] += sum(_char_em(c) for c in piece) * size * (1 + bold_extra if bold else 1.0)
+                lines[-1] += sum(char_em(c) for c in piece) * size * (1 + bold_extra if bold else 1.0)
     return max(lines), size
 
 
@@ -154,6 +148,8 @@ def lint_wrap(path: str | Path, safety: float | None = None) -> list[dict[str, A
     for no, slide in enumerate(prs.slides, 1):
         for raw in slide.shapes:
             shape: Any = raw  # python-pptx 的型別標註把 BaseShape 當成沒有 text_frame／table
+            if shape.name == REFLOW:  # 本來就該自動折行的文字（參考文獻）
+                continue
             if shape.has_text_frame:
                 frame = shape.text_frame
                 base = _inherited(slide, shape)

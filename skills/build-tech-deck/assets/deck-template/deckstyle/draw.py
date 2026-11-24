@@ -250,8 +250,13 @@ def card(
     valign: MSO_ANCHOR = MSO_ANCHOR.TOP,
     pad_x: float = 0.13,
     pad_y: float = 0.08,
+    en: str | None = None,
 ) -> Any:
-    """繪製單一語義卡片：圓角、細線、語義強調色。"""
+    """繪製單一語義卡片：圓角、細線、語義強調色。
+
+    `en` 是標題下一行較小的英文名稱（中英並列的專有名詞，如「生產系譜」下的 Production Genealogy）：
+    字級約標題的七成、不加粗、灰字（深底卡片用內文色），與標題之間不留段距。
+    """
     spec = t.cards.get(kind, t.cards["gray"])
     sh = _rounded(t, slide, x, y, w, h, spec.fill, spec.line, spec.weight)
     tf = sh.text_frame
@@ -264,9 +269,15 @@ def card(
     if title:
         p0 = tf.paragraphs[0]
         p0.alignment = PP_ALIGN.LEFT
-        p0.space_after = Pt(3 if items else 0)
+        p0.space_after = Pt(3 if items and not en else 0)
         p0.line_spacing = 1.12
         runs(t, p0, title, tfs, spec.head, bold=True)
+        if en:
+            pe = tf.add_paragraph()
+            pe.alignment = PP_ALIGN.LEFT
+            pe.space_after = Pt(3 if items else 0)
+            pe.line_spacing = 1.05
+            runs(t, pe, en, round(tfs * 0.70 * 2) / 2, spec.ink if kind == "solid_dark" else t.muted, bold=False)
     for i, item in enumerate(items):
         p = tf.paragraphs[0] if (i == 0 and not title) else tf.add_paragraph()
         p.alignment = PP_ALIGN.LEFT

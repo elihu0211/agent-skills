@@ -45,15 +45,18 @@
 | `columns` | 頂線標題加短條列（對比、結論） | `cols[{title,kind,items}]` |
 | `flow` | 水平流程與管線 | `items[{kind,title,body}]`、`caption`、`numbered`、`edge-labels`、`h` |
 | `swimlane` | 跨角色時序 | `lanes[{name,sub}]`、`steps[{lane,title,sub,kind,edge}]`、`thesis` |
-| `arch-graph` | 系統拓撲、狀態圖 | `nodes[{id,col,row,kind,title,sub}]`、`edges[{from,to,kind,label}]`、`cols`、`rows`、`col-headers`、`zones`、`side-thesis` |
+| `arch-graph` | 系統拓撲、狀態圖 | `nodes[{id,col,row,kind,title,en,sub}]`、`edges[{from,to,kind,label}]`、`cols`、`rows`、`col-headers`、`zones`、`side-thesis` |
 | `timeline-diagram` | 多軌時間軸 | `tracks[{title,phases[{time,kind,title,body}]}]` |
 | `bench-chart` | 量化長條圖加論證面板 | `groups[{title,bars[{label,ratio,value,kind}]}]`、`thesis` |
-| `table` | 比較與對照 | `rows`、`col-w`、`aligns`、`highlight`、`h`；儲存格可寫 `[文字, green]` |
+| `table` | 比較與對照 | `rows`、`col-w`、`aligns`、`highlight`、`h`（高度上限）；儲存格可寫 `[文字, green]` |
 | `layers` | 分層金字塔（責任分界） | `tiers[{name,sub,kind,title,body}]`、`left-w` |
 | `shots` | 實際畫面截圖列 | `items[{image,title,body,alt,crop}]`、`side`、`side-w`、`cap-h` |
+| `references` | 參考文獻（書目自動折行、懸掛縮排） | `items`（每筆一個字串）、`title`、`size` |
 | `note` | 底部一行總結（對策、取捨） | `lines` |
 
-邊的 `kind`：`forward`（一般）、`green`（確定）、`dashed`（候選）、`blocked`（攔截，帶 ✕）。`arch-graph` 的節點兩行副標在 `rows: 4` 時會頂到框外，列數多就寫單行；`zones` 的標題會壓到第一列節點，自己留一列。完整欄位表在引擎的 `deckstyle/spec.py`（`BLOCK_SCHEMA`），`deckstyle schema spec` 輸出同一份的 JSON Schema。
+邊的 `kind`：`forward`（一般）、`green`（確定）、`dashed`（候選）、`blocked`（攔截，帶 ✕）。`arch-graph` 的節點兩行副標在 `rows: 4` 時會頂到框外，列數多就寫單行；`zones` 的標題會壓到第一列節點，自己留一列。節點的 `en` 是標題下一行小字英文（中英並列的專有名詞），整張圖要嘛每個節點都寫、要嘛都不寫；有 `en` 的節點副標寫一行。
+
+表格列高依內容估算：單行的列等高，儲存格以 `\n` 分成兩三行的列自動撐高，總高照實際列高加總，置中與結論列位置都算得準；放不進可用高度時建置報錯，不會壓到結論列。`references` 的書目照原文寫成一整行，不要手動斷行：折在哪裡交給 PowerPoint，零折行檢查不管這個區塊；字串裡有半形逗號，YAML 要用 `- "..."` 逐行寫或整段加引號，不要寫進方括號清單。完整欄位表在引擎的 `deckstyle/spec.py`（`BLOCK_SCHEMA`），`deckstyle schema spec` 輸出同一份的 JSON Schema。
 
 ## 規格撰寫範式
 
