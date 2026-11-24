@@ -57,6 +57,22 @@ author:
 - `lang` 預設 `zh-TW`，標在所有文字與文件屬性。`lint.deny`／`lint.allow` 是白話命名檢查的專案專屬名單，也可以放在這幾層。
 - `uv run deckstyle inspect deck/` 列出參與合併的檔案與合併後的結果。
 
+### 在 deck.yml 取用其他鍵：`{{< meta 鍵 >}}`
+
+課程名稱、專案代號這類每份簡報都會出現、又不該各寫一次的值，寫在分層設定裡，deck.yml 用 Quarto 官方的 meta 短代碼取用：
+
+```yaml
+# <課程>/_metadata.yml
+course-name: 範例課程
+
+# <課程>/deck/deck.yml（含短代碼的值要加引號，否則 YAML 把 { 當成對應表）
+category: "{{< meta course-name >}}｜期末報告"
+```
+
+- 取的是 `_quarto.yml`／`_metadata.yml` 分層合併後的任一個鍵（不限上面四個），鍵照 YAML 原樣，`a.b` 取巢狀鍵；deck.yml 自己的鍵不是來源。
+- 任何字串欄位都可用（`category`、頁面的 `ref`、區塊文字…），建置、大綱、預覽與 lint 看到的都是換好的文字。
+- 找不到鍵或值不是字串、數字就報錯，不會把佔位字原樣印上投影片。
+
 ## 簡報內容：`deck.yml`
 
 鍵用 kebab-case（`short-title`、`col-w`），讀進來後換成內部的 snake_case；只有一種寫法，沒有別名與相容形式。
