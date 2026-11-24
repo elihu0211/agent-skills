@@ -186,3 +186,42 @@ def test_describe_lists_files_and_result(repo: Path) -> None:
     text = config.describe({"short_title": "s"}, repo)
     assert "_quarto.yml" in text
     assert "作者：範例單位 作者甲" in text
+
+
+# ---- {{< meta 鍵 >}} ----
+
+
+def test_meta_shortcode_reads_any_layered_key(repo: Path) -> None:
+    write(repo / "_quarto.yml", AUTHOR)
+    write(repo / "c" / "_metadata.yml", "course-name: 課程甲\ncourse:\n  code: 1234\n")
+    spec = {
+        "category": "{{< meta course.code >}} {{< meta course-name >}}｜期末",
+        "slides": [
+            {
+                "ref": "{{<meta course-name>}}｜問題",
+                "blocks": [{"block": "note", "lines": ["{{< meta course-name >}}"]}],
+            }
+        ],
+    }
+    final = config.resolve(spec, repo / "c" / "deck")
+    assert final["category"] == "1234 課程甲｜期末"
+    assert final["slides"][0]["ref"] == "課程甲｜問題"
+    assert final["slides"][0]["blocks"][0]["lines"] == ["課程甲"]
+    assert spec["category"].startswith("{{< meta")  # 原規格不動
+
+
+def test_meta_shortcode_nearer_layer_wins(repo: Path) -> None:
+    write(repo / "_quarto.yml", "course-name: 上層\n")
+    write(repo / "c" / "_metadata.yml", "course-name: 下層\n")
+    assert config.resolve({"category": "{{< meta course-name >}}"}, repo / "c")["category"] == "下層"
+
+
+def test_meta_shortcode_missing_key_is_an_error(repo: Path) -> None:
+    with pytest.raises(SpecError, match="找不到這個鍵"):
+        config.resolve({"category": "{{< meta course-name >}}"}, repo)
+
+
+def test_meta_shortcode_rejects_non_scalar_values(repo: Path) -> None:
+    write(repo / "_quarto.yml", "course:\n  code: 1234\n")
+    with pytest.raises(SpecError, match="值須為字串或數字"):
+        config.resolve({"category": "{{< meta course >}}"}, repo)

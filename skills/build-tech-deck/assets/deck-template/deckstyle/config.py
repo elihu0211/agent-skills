@@ -8,13 +8,17 @@ Quarto 把專案層（`_quarto.yml`）、目錄層（`dir/_metadata.yml`）與�
     <簡報目錄>/deck.yml              文件層：deck.yml 裡寫的鍵最後合併
 
 搜尋範圍是簡報目錄往上到專案根（含 `.git` 的目錄）；找不到專案根就只看簡報目錄自己，不會誤讀無關的上層檔案。
-每個目錄依序貢獻 `_quarto.yml`、`_metadata.yml`。這些檔案裡簡報用得到的只有 `LAYERED` 的鍵，其餘（Quarto 的格式、
-書目…）忽略。作者用 Quarto 的結構寫法：`name` 加 `affiliation`（字串或清單），也收 `affiliations`（字串或 `{name: ...}`
+每個目錄依序貢獻 `_quarto.yml`、`_metadata.yml`。這些檔案裡直接合併進規格的只有 `LAYERED` 的鍵，其餘（Quarto 的格式、
+書目…）不併入。作者用 Quarto 的結構寫法：`name` 加 `affiliation`（字串或清單），也收 `affiliations`（字串或 `{name: ...}`
 的清單）；陣列串接，所以上層的作者在下層仍在，同名的作者合併成一位。
+
+deck.yml 的字串可用 Quarto 官方的 `{{< meta 鍵 >}}` 取分層中繼資料的任一個鍵（鍵照 YAML 原樣，`a.b` 取巢狀鍵），
+讓課程名稱這類值只在 `_metadata.yml` 寫一次；找不到或不是純量就報錯，不留下原樣的佔位字。
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -26,6 +30,8 @@ FILES = ("_quarto.yml", "_quarto.yaml", "_metadata.yml", "_metadata.yaml")
 # 可分層的鍵：作者、日期、語言與 lint 名單。標題、輸出檔名與頁面內容是每份簡報自己的，不分層。
 LAYERED = ("author", "date", "lang", "lint")
 DEFAULT_LANG = "zh-TW"
+# Quarto 的 meta 短代碼；鍵可含 `-`、`_` 與表示巢狀的 `.`
+META_SHORTCODE = re.compile(r"\{\{<\s*meta\s+([A-Za-z0-9_][A-Za-z0-9_.-]*)\s*>\}\}")
 
 
 def project_root(start: Path) -> Path | None:
@@ -143,8 +149,7 @@ def author_names(authors: Sequence[Mapping[str, Any]]) -> str:
 # ---- 分層讀取與合併 ----
 
 
-def load_layer(path: Path) -> dict[str, Any]:
-    """讀一份 `_quarto.yml`／`_metadata.yml`；只取 `LAYERED` 的鍵，作者先正規化（才能跨層串接）。"""
+def _read(path: Path) -> dict[str, Any]:
     try:
         data = yamlio.load(path)
     except yamlio.YamlError as e:
@@ -153,7 +158,12 @@ def load_layer(path: Path) -> dict[str, Any]:
         return {}
     if not isinstance(data, Mapping):
         raise SpecError(f"{path}：最上層須為對應表")
-    layer = {k: from_yaml(v) for k, v in data.items() if k in LAYERED}
+    return dict(data)
+
+
+def load_layer(path: Path) -> dict[str, Any]:
+    """讀一份 `_quarto.yml`／`_metadata.yml`；只取 `LAYERED` 的鍵，作者先正規化（才能跨層串接）。"""
+    layer = {k: from_yaml(v) for k, v in _read(path).items() if k in LAYERED}
     if "author" in layer:
         layer["author"] = normalize_authors(layer["author"], f"{path.name} 的 author")
     return layer
@@ -173,7 +183,40 @@ def resolve(spec: Mapping[str, Any], deck_dir: Path, stop: Path | None = None) -
     if "author" in merged:
         merged["author"] = normalize_authors(merged["author"])  # 串接後再合併同名
     merged.setdefault("lang", DEFAULT_LANG)
-    return {**spec, **merged}
+    return expand({**spec, **merged}, metadata(deck_dir, stop))
+
+
+# ---- {{< meta 鍵 >}} ----
+
+
+def metadata(deck_dir: Path, stop: Path | None = None) -> dict[str, Any]:
+    """分層設定檔的全部鍵（遠到近合併，鍵照 YAML 原樣）；`{{< meta 鍵 >}}` 從這裡取值。"""
+    merged: dict[str, Any] = {}
+    for path in layer_files(deck_dir, stop):
+        merged = merge(merged, _read(path))
+    return merged
+
+
+def _lookup(meta: Mapping[str, Any], key: str) -> str:
+    value: Any = meta
+    for part in key.split("."):
+        if not isinstance(value, Mapping) or part not in value:
+            raise SpecError(f"{{{{< meta {key} >}}}}：_quarto.yml／_metadata.yml 分層裡找不到這個鍵")
+        value = value[part]
+    if isinstance(value, bool) or not isinstance(value, (str, int, float)):
+        raise SpecError(f"{{{{< meta {key} >}}}}：值須為字串或數字，實際是 {value!r}")
+    return str(value)
+
+
+def expand(value: Any, meta: Mapping[str, Any]) -> Any:
+    """把規格裡所有字串的 `{{< meta 鍵 >}}` 換成中繼資料的值；其他型別原樣，原規格不動。"""
+    if isinstance(value, str):
+        return META_SHORTCODE.sub(lambda m: _lookup(meta, m.group(1)), value)
+    if isinstance(value, Mapping):
+        return {k: expand(v, meta) for k, v in value.items()}
+    if isinstance(value, list):
+        return [expand(v, meta) for v in value]
+    return value
 
 
 def describe(spec: Mapping[str, Any], deck_dir: Path, stop: Path | None = None) -> str:
