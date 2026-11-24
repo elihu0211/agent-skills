@@ -71,6 +71,7 @@ category: "{{< meta course-name >}}｜期末報告"
 
 - 取的是 `_quarto.yml`／`_metadata.yml` 分層合併後的任一個鍵（不限上面四個），鍵照 YAML 原樣，`a.b` 取巢狀鍵；deck.yml 自己的鍵不是來源。
 - 任何字串欄位都可用（`category`、頁面的 `ref`、區塊文字…），建置、大綱、預覽與 lint 看到的都是換好的文字。
+- `{{< meta author >}}` 是例外：作者是清單，取用時排成封面預設的作者行（「單位 姓名」，含 deck.yml 自己加的作者）。要在封面底部接上其他文字時用它，作者就不必在 `meta` 重寫一次：`meta: "{{< meta author >}}；指導教授 {{< meta advisor >}}"`。
 - 找不到鍵或值不是字串、數字就報錯，不會把佔位字原樣印上投影片。
 
 ## 簡報內容：`deck.yml`

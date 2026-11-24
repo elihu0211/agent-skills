@@ -14,6 +14,7 @@ Quarto 把專案層（`_quarto.yml`）、目錄層（`dir/_metadata.yml`）與�
 
 deck.yml 的字串可用 Quarto 官方的 `{{< meta 鍵 >}}` 取分層中繼資料的任一個鍵（鍵照 YAML 原樣，`a.b` 取巢狀鍵），
 讓課程名稱這類值只在 `_metadata.yml` 寫一次；找不到或不是純量就報錯，不留下原樣的佔位字。
+`{{< meta author >}}` 例外：取合併後（含 deck.yml）的作者，排成與封面預設相同的「單位 姓名」一行。
 """
 
 from __future__ import annotations
@@ -183,7 +184,11 @@ def resolve(spec: Mapping[str, Any], deck_dir: Path, stop: Path | None = None) -
     if "author" in merged:
         merged["author"] = normalize_authors(merged["author"])  # 串接後再合併同名
     merged.setdefault("lang", DEFAULT_LANG)
-    return expand({**spec, **merged}, metadata(deck_dir, stop))
+    meta = metadata(deck_dir, stop)
+    if "author" in merged:
+        # 作者是清單，取用時排成封面預設的作者行，才能在 meta 等欄位接上其他文字
+        meta = {**meta, "author": format_author(merged["author"])}
+    return expand({**spec, **merged}, meta)
 
 
 # ---- {{< meta 鍵 >}} ----

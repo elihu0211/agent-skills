@@ -225,3 +225,15 @@ def test_meta_shortcode_rejects_non_scalar_values(repo: Path) -> None:
     write(repo / "_quarto.yml", "course:\n  code: 1234\n")
     with pytest.raises(SpecError, match="值須為字串或數字"):
         config.resolve({"category": "{{< meta course >}}"}, repo)
+
+
+def test_meta_author_is_the_formatted_cover_author_line(repo: Path) -> None:
+    write(repo / "_quarto.yml", AUTHOR)
+    write(repo / "c" / "_metadata.yml", "advisor: 教授甲\nauthor:\n  - name: 作者乙\n    affiliation: 範例單位\n")
+    spec = {"meta": "{{< meta author >}}；指導教授 {{< meta advisor >}}"}
+    assert config.resolve(spec, repo / "c")["meta"] == "範例單位 作者甲　作者乙；指導教授 教授甲"
+
+
+def test_meta_author_without_any_author_is_an_error(repo: Path) -> None:
+    with pytest.raises(SpecError, match="找不到這個鍵"):
+        config.resolve({"meta": "{{< meta author >}}"}, repo)
