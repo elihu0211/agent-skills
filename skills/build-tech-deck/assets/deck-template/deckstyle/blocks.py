@@ -685,6 +685,7 @@ _CELL_PAD_X, _CELL_PAD_Y = 0.10, 0.04  # 儲存格左右、上下內距（英吋
 _CELL_SPACING = 1.15  # 儲存格段落的行距倍數
 _HEAD_SIZE = 13.0  # 首列字級
 _BIG_ROW = 0.56  # 基準列高達此值用 13.5 pt，否則 12.5 pt
+_HEAD_EXTRA = 0.10  # 首列在字高之外多留的上下空白（英吋）：表頭緊湊，高度留給內容列
 
 
 def _row_need(t: Theme, row: Sequence[Any], widths: Sequence[float], size: float, bold: bool) -> float:
@@ -705,29 +706,31 @@ def table_rows(
 ) -> tuple[float, list[float]]:
     """回傳（內文字級, 每列高度）。
 
-    基準列高照列數均分 `height`（至多 t.limits.row_max_h）；放不下內容的列（儲存格有兩三行）撐高到剛好放得下。
-    撐高後總高超過 `height` 時壓低基準列高，讓整張表仍在 `height` 內；基準列高低於 0.56 吋時內文改用 12.5 pt 重算。
+    首列（欄名）緊湊：只留字高加 `_HEAD_EXTRA` 的上下空白，不跟內容列一起被拉高。內容列的基準列高照列數均分
+    剩下的高度（至多 t.limits.row_max_h）；放不下內容的列（儲存格有兩三行）撐高到剛好放得下。撐高後總高超過
+    `height` 時壓低基準列高，讓整張表仍在 `height` 內；基準列高低於 0.56 吋時內文改用 12.5 pt 重算。
     連每列都只留內容所需還放不下，就照所需高度回傳，由頁面的溢出檢查回報。
     """
-    nr = len(rows)
     scale = t.layout.width / sum(col_w)
     widths = [w * scale - 2 * _CELL_PAD_X for w in col_w]
-    start = min(t.limits.row_max_h, height / nr)
+    head = _row_need(t, rows[0], widths, _HEAD_SIZE, True) + _HEAD_EXTRA
+    body = rows[1:]
+    if not body:
+        return 13.5, [head]
+    avail = height - head
+    start = max(0.0, min(t.limits.row_max_h, avail / len(body)))
     for size in (13.5, 12.5):
-        need = [
-            _row_need(t, r, widths, _HEAD_SIZE if i == 0 else size, i == 0 or bool(highlight and i in highlight))
-            for i, r in enumerate(rows)
-        ]
-        lo, hi = 0.0, start  # 基準列高 b 越小總高越小：二分找放得進 height 的最大 b
-        if sum(max(hi, n) for n in need) > height:
+        need = [_row_need(t, r, widths, size, bool(highlight and i in highlight)) for i, r in enumerate(body, 1)]
+        lo, hi = 0.0, start  # 基準列高 b 越小總高越小：二分找放得進剩餘高度的最大 b
+        if sum(max(hi, n) for n in need) > avail:
             for _ in range(40):
                 mid = (lo + hi) / 2
-                lo, hi = (mid, hi) if sum(max(mid, n) for n in need) <= height else (lo, mid)
+                lo, hi = (mid, hi) if sum(max(mid, n) for n in need) <= avail else (lo, mid)
             base = lo
         else:
             base = hi
         if base >= _BIG_ROW or size == 12.5:
-            return size, [max(base, n) for n in need]
+            return size, [head, *(max(base, n) for n in need)]
     raise AssertionError("unreachable")
 
 
@@ -746,7 +749,7 @@ def table(
 
     儲存格可寫字串，或 `(字串, kind)` 做語義高亮（kind：green、red、blue、amber，字色隨語義、粗體）。
     `aligns` 每欄一個 left／center／right；`h` 是整張表的高度上限（省略則用可用高度）。列高見 `table_rows`：
-    單行的列等高，有兩三行的列撐高到放得下，總高照實際列高加總，所以置中與結論列的位置都算得準。
+    首列緊湊；內容列單行的等高，有兩三行的撐高到放得下，總高照實際列高加總，所以置中與結論列的位置都算得準。
     每列只留一行字的高度還放不進 `h` 時照所需高度畫，頁面放不下才由溢出檢查報錯。
     """
     check_table(rows, col_w)

@@ -289,6 +289,19 @@ def test_table_rows_grow_to_fit_multi_line_cells(build_spec: Build, theme: Theme
     assert abs(gf.top - centered) < Inches(0.01)
 
 
+def test_header_row_stays_compact(build_spec: Build) -> None:
+    """首列只留字高加少許空白，不跟內容列一起被拉高；省下的高度給內容列。"""
+    rows = [["欄名", "說明"]] + [["一行", "一行"]] * 4
+    out = build_spec(one_slide([("table", {"rows": rows, "col_w": [1, 3]})]))
+    hs = [r.height for r in _shape(out, 2, lambda sh: sh.has_table).table.rows]
+    assert hs[0] < Inches(0.5) < hs[1]
+    assert len(set(hs[1:])) == 1
+
+
+def test_header_only_table_renders(build_spec: Build) -> None:
+    build_spec(one_slide([("table", {"rows": [["只有欄名"]], "col_w": [1]})]))
+
+
 def test_table_rows_shrink_to_stay_within_h(build_spec: Build) -> None:
     rows = [["欄"]] + [[f"第 {i} 列"] for i in range(6)] + [["甲\n乙\n丙"]]
     out = build_spec(one_slide([("table", {"rows": rows, "col_w": [1], "h": 4.0})]))
