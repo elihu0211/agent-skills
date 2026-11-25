@@ -929,6 +929,38 @@ def _asset(assets: Path, rel: str) -> Path:
     return p
 
 
+_SHOT_CAP = 12.0  # 圖說字級（pt）
+
+
+def _shot_label(it: dict[str, Any]) -> str:
+    return f"**{it['title']}**　{it['body']}" if it.get("body") else f"**{it['title']}**"
+
+
+def _shot_aspect(path: Path, it: dict[str, Any]) -> tuple[float, float]:
+    """（原圖高／寬, 畫出的高／寬）；`crop` 只取上緣、使高／寬等於該值。"""
+    full = _image_aspect(path)
+    return full, (min(full, float(it["crop"])) if it.get("crop") else full)
+
+
+def _shot_picture(
+    t: Theme,
+    slide: Any,
+    path: Path,
+    it: dict[str, Any],
+    box: tuple[float, float, float, float],
+    aspect: float,
+    full: float,
+) -> None:
+    """放一張圖（外加一圈細框）並寫替代文字；畫出的高／寬小於原圖時裁掉下緣。"""
+    x, y, w, h = box
+    pic = slide.shapes.add_picture(str(path), Inches(x), Inches(y), Inches(w), Inches(h))
+    alt_text(pic, it.get("alt") or "：".join(v for v in (it["title"], it.get("body")) if v))
+    if aspect < full:
+        pic.crop_bottom = 1.0 - aspect / full
+        pic.height = Inches(h)
+    rect(t, slide, x, y, w, h, line_color=t.rule, weight=t.line_hair)
+
+
 def shots(
     t: Theme,
     slide: Any,
@@ -937,6 +969,7 @@ def shots(
     side: Sequence[dict[str, Any]] | None = None,
     side_w: float | None = None,
     cap_h: float | None = None,
+    figure: bool = False,
     height: float = 4.35,
     *,
     assets: Path,
@@ -946,8 +979,13 @@ def shots(
     items：`{"image": 相對簡報目錄的路徑, "title": 標題, "body": 說明, "crop": 高／寬（選填）}`；多張圖等寬並排，
     依各自長寬比縮放；`crop` 只取畫面上緣、使高／寬等於該值（扁長版面用，不另存裁好的圖）。
     side：右側卡片（`kind`、`title`、`body`），與 arch_graph 的 side_thesis 同形。
+    figure：單張大圖撐滿整個區塊高度，見 `_figure`。
     `assets` 是簡報目錄，圖片路徑相對於它（Deck 帶入，規格不寫）。
     """
+    if figure:
+        if len(items) != 1:
+            raise SpecError(f"shots 的 figure 只放一張圖，這裡有 {len(items)} 張；多張圖並排拿掉 figure")
+        return _figure(t, slide, y, items[0], side, side_w, cap_h, height, assets)
     has_side = bool(side)
     side_w = t.layout.side_w if side_w is None else side_w
     gap_side = t.layout.side_gap if has_side else 0.0
@@ -956,25 +994,74 @@ def shots(
     used = 0.0
     for (ix, cw), it in zip(split(t.layout.left, area_w, len(items), 0.24), items, strict=True):
         path = _asset(assets, it["image"])
-        full = _image_aspect(path)
-        aspect = min(full, float(it["crop"])) if it.get("crop") else full  # crop：只取上緣、高／寬 = 此值
+        full, aspect = _shot_aspect(path, it)
         iw = cw
         ih = iw * aspect
         if ih + cap > height:
             ih = height - cap
             iw = ih / aspect
-        pic = slide.shapes.add_picture(str(path), Inches(ix), Inches(y), Inches(iw), Inches(ih))
-        alt_text(pic, it.get("alt") or "：".join(x for x in (it["title"], it.get("body")) if x))
-        if aspect < full:
-            pic.crop_bottom = 1.0 - aspect / full
-            pic.height = Inches(ih)
-        rect(t, slide, ix, y, iw, ih, line_color=t.rule, weight=t.line_hair)
-        label = f"**{it['title']}**　{it['body']}" if it.get("body") else f"**{it['title']}**"
-        text_box(t, slide, ix, y + ih + 0.08, iw, cap - 0.08, label, size=12.0, color=t.gray)
+        _shot_picture(t, slide, path, it, (ix, y, iw, ih), aspect, full)
+        text_box(t, slide, ix, y + ih + 0.08, iw, cap - 0.08, _shot_label(it), size=_SHOT_CAP, color=t.gray)
         used = max(used, ih + cap)
     if has_side:
         card_stack(t, slide, t.layout.left + area_w + gap_side, y, side_w, used, side, bullet=False)
     return used
+
+
+def _figure(
+    t: Theme,
+    slide: Any,
+    y: float,
+    it: dict[str, Any],
+    side: Sequence[dict[str, Any]] | None,
+    side_w: float | None,
+    cap_h: float | None,
+    height: float,
+    assets: Path,
+) -> float:
+    """單張大圖（密集的架構圖、流程圖）：圖撐滿區塊高度，不讓圖下的說明列吃掉高度。
+
+    有 side 時圖靠左，卡片欄接在圖的右緣、吃掉剩下的寬度，圖說（標題一行、說明一行）放在卡片欄底部、與圖底對齊；
+    `side_w` 是卡片欄的最小寬度（預設 `layout.side-w`），圖太寬時縮圖讓出這個寬度。
+    沒有 side 時圖水平置中，圖說照常在圖下（`cap_h` 預設 0.56）。
+    """
+    lay = t.layout
+    path = _asset(assets, it["image"])
+    full, aspect = _shot_aspect(path, it)
+    if side:
+        iw = min(height / aspect, lay.width - lay.side_gap - (lay.side_w if side_w is None else side_w))
+        ih = iw * aspect
+        _shot_picture(t, slide, path, it, (lay.left, y, iw, ih), aspect, full)
+        sx = lay.left + iw + lay.side_gap
+        sw = lay.right - sx
+        lines = [f"**{it['title']}**", *([it["body"]] if it.get("body") else [])]
+        space = 4.0  # 段距（pt），與 text_box 預設相同
+        cap = (
+            cap_h
+            if cap_h is not None
+            else (len(lines) * line_height(_SHOT_CAP, t.type.line_em, 1.15) + (len(lines) - 1) * space / 72.0)
+        )
+        text_box(t, slide, sx, y + ih - cap, sw, cap, lines, size=_SHOT_CAP, color=t.gray, anchor=MSO_ANCHOR.BOTTOM)
+        card_stack(t, slide, sx, y, sw, ih - cap - lay.stack_gap, side, bullet=False)
+        return ih
+    cap = 0.56 if cap_h is None else cap_h
+    iw = min((height - cap) / aspect, lay.width)
+    ih = iw * aspect
+    ix = lay.left + (lay.width - iw) / 2
+    _shot_picture(t, slide, path, it, (ix, y, iw, ih), aspect, full)
+    text_box(
+        t,
+        slide,
+        ix,
+        y + ih + 0.08,
+        iw,
+        cap - 0.08,
+        _shot_label(it),
+        size=_SHOT_CAP,
+        color=t.gray,
+        align=PP_ALIGN.CENTER,
+    )
+    return ih + cap
 
 
 def layers(

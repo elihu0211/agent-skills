@@ -40,7 +40,7 @@ _TYPES: dict[str, dict[str, Any]] = {
     ),
     **dict.fromkeys(("h", "tfs", "bfs", "side_w", "cap_h", "crop", "left_w", "ratio", "vmin", "vmax", "size"), _NUM),
     **dict.fromkeys(("lane", "col", "row", "col_span", "row_span", "cols", "rows"), _INT),
-    **dict.fromkeys(("bullet", "numbered", "bold", "dash", "inset", "legend", "labels"), _BOOL),
+    **dict.fromkeys(("bullet", "numbered", "bold", "dash", "inset", "legend", "labels", "figure"), _BOOL),
     **dict.fromkeys(("body", "items"), _TEXT),
     **dict.fromkeys(("edge_labels", "col_headers", "categories", "lines"), _STRS),
     "num": _SCALAR,
