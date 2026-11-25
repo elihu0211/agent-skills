@@ -189,7 +189,7 @@ BLOCK_SCHEMA: dict[str, dict[str, Any]] = {
     },
     "shots": {
         "req": ("items",),
-        "opt": ("side", "side_w", "cap_h", "h"),
+        "opt": ("side", "side_w", "cap_h", "figure", "h"),
         "lists": {
             "items": {"req": ("image", "title"), "opt": ("body", "crop", "alt")},
             "side": _TXT,

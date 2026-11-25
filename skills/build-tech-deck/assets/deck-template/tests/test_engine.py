@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 from conftest import TEMPLATE, one_slide
 from pptx import Presentation
+from pptx.enum.shapes import MSO_SHAPE_TYPE
 from pptx.util import Inches
 
 from deckstyle import design, engine
@@ -215,6 +216,51 @@ def test_shots_crop_and_side(build_spec: Build) -> None:
         "side": [{"kind": "blue", "title": "怎麼看", "body": "x"}],
     }
     build_spec(one_slide([("shots", shots)]))
+
+
+def _figure_slide(build_spec: Build, **shots: Any) -> Any:
+    spec = {"items": [{"image": "screens/sample.png", "title": "圖", "body": "說明"}], "figure": True, **shots}
+    slide = Presentation(str(build_spec(one_slide([("shots", spec)])))).slides[1]
+    pic = next(s for s in slide.shapes if s.shape_type == MSO_SHAPE_TYPE.PICTURE)
+    return slide, pic
+
+
+def _near(a: float, b: float) -> bool:
+    return abs(a - b) < Inches(0.01)
+
+
+def test_shots_figure_fills_the_height_and_side_takes_the_rest(build_spec: Build, theme: Theme) -> None:
+    """figure：圖撐滿區塊高度；卡片欄接在圖右緣、延伸到內容區右緣，圖說在卡片欄底部、與圖底對齊。"""
+    lay = theme.layout
+    side = [{"kind": "blue", "title": "怎麼看", "body": "x"}]
+    slide, pic = _figure_slide(build_spec, side=side, side_w=2.8)  # 範例圖 5:3，卡片欄 2.8 吋時圖受高度限制
+    assert _near(pic.top, Inches(lay.top)) and _near(pic.height, Inches(lay.bottom - lay.top))
+    sx = pic.left + pic.width + Inches(lay.side_gap)
+    caption = next(s for s in slide.shapes if s.has_text_frame and s.text_frame.text.startswith("圖"))
+    assert _near(caption.left, sx) and _near(caption.left + caption.width, Inches(lay.right))
+    assert _near(caption.top + caption.height, pic.top + pic.height)
+    cards = [s for s in slide.shapes if _near(s.left, sx) and s.shape_id != caption.shape_id]
+    assert cards and all(s.top + s.height < caption.top for s in cards)
+
+
+def test_shots_figure_keeps_the_minimum_side_width(build_spec: Build, theme: Theme) -> None:
+    """圖太寬時縮圖，卡片欄至少留 side-w（預設 layout.side-w）。"""
+    lay = theme.layout
+    _, pic = _figure_slide(build_spec, side=[{"kind": "blue", "title": "怎麼看", "body": "x"}])
+    assert _near(pic.width, Inches(lay.width - lay.side_gap - lay.side_w))
+    assert pic.height < Inches(lay.bottom - lay.top)
+
+
+def test_shots_figure_without_side_is_centered(build_spec: Build, theme: Theme) -> None:
+    lay = theme.layout
+    _, pic = _figure_slide(build_spec)
+    assert _near(pic.left + pic.width / 2, Inches(lay.left + lay.width / 2))
+
+
+def test_shots_figure_takes_one_image(build_spec: Build) -> None:
+    item = {"image": "screens/sample.png", "title": "圖"}
+    with pytest.raises(SpecError, match="figure"):
+        build_spec(one_slide([("shots", {"items": [item, item], "figure": True})]))
 
 
 def test_images_resolve_relative_to_deck_dir(tmp_path: Path, theme: Theme) -> None:
