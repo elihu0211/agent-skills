@@ -111,6 +111,8 @@ def check_table(rows: Sequence[Sequence[Any]], col_w: Sequence[float]) -> None:
 # 每個區塊：req 必填、opt 選填、lists 是「欄位 → 該欄每個元素的欄位表」（可巢狀）、kinds 是值須為卡片 kind 的欄位、
 # enums 是值須在名單內的欄位。`h`（固定高度，英吋）每個區塊都收。新增區塊要同時改這裡、blocks.py 與 outline.py。
 
+#: 圖框區塊（流程、拓撲、時序圖）方框內文字的水平對齊
+NODE_ALIGNS = ("left", "center")
 _TXT = {"req": ("title",), "opt": ("kind", "body", "bullet"), "kinds": ("kind",)}  # 帶標題的卡片
 
 BLOCK_SCHEMA: dict[str, dict[str, Any]] = {
@@ -118,7 +120,8 @@ BLOCK_SCHEMA: dict[str, dict[str, Any]] = {
     "cards": {"req": ("items",), "opt": ("h", "bullet"), "lists": {"items": _TXT}},
     "flow": {
         "req": ("items",),
-        "opt": ("h", "caption", "edge_labels", "numbered"),
+        "opt": ("h", "caption", "edge_labels", "numbered", "align"),
+        "enums": {"align": NODE_ALIGNS},
         "lists": {"items": {"req": ("title",), "opt": ("kind", "body"), "kinds": ("kind",)}},
     },
     "swimlane": {
@@ -137,7 +140,8 @@ BLOCK_SCHEMA: dict[str, dict[str, Any]] = {
     },
     "arch_graph": {
         "req": ("nodes",),
-        "opt": ("edges", "zones", "col_headers", "side_thesis", "cols", "rows", "h"),
+        "opt": ("edges", "zones", "col_headers", "side_thesis", "cols", "rows", "h", "align"),
+        "enums": {"align": NODE_ALIGNS},
         "lists": {
             "nodes": {
                 "req": ("id", "col", "row", "title"),
@@ -168,7 +172,8 @@ BLOCK_SCHEMA: dict[str, dict[str, Any]] = {
     },
     "timeline_diagram": {
         "req": ("tracks",),
-        "opt": ("h",),
+        "opt": ("h", "align"),
+        "enums": {"align": NODE_ALIGNS},
         "lists": {
             "tracks": {
                 "req": ("title", "phases"),

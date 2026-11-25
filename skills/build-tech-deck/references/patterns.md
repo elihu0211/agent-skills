@@ -43,10 +43,10 @@
 | `chart` | 原生圖表（可在 PowerPoint 編輯資料） | `type`（`column`、`bar`、`line`、`pie`）、`categories`、`series[{name,values,kind}]`、`fmt`、`legend`、`labels`、`vmin`、`vmax`、`side` |
 | `steps` | 大號序號的步驟或摘要數字 | `items[{num,title,body}]` |
 | `columns` | 頂線標題加短條列（對比、結論） | `cols[{title,kind,items}]` |
-| `flow` | 水平流程與管線 | `items[{kind,title,body}]`、`caption`、`numbered`、`edge-labels`、`h` |
+| `flow` | 水平流程與管線 | `items[{kind,title,body}]`、`caption`、`numbered`、`edge-labels`、`align`、`h` |
 | `swimlane` | 跨角色時序 | `lanes[{name,sub}]`、`steps[{lane,title,sub,kind,edge}]`、`thesis` |
-| `arch-graph` | 系統拓撲、狀態圖 | `nodes[{id,col,row,kind,title,en,sub}]`、`edges[{from,to,kind,label}]`、`cols`、`rows`、`col-headers`、`zones`、`side-thesis` |
-| `timeline-diagram` | 多軌時間軸 | `tracks[{title,phases[{time,kind,title,body}]}]` |
+| `arch-graph` | 系統拓撲、狀態圖 | `nodes[{id,col,row,kind,title,en,sub}]`、`edges[{from,to,kind,label}]`、`cols`、`rows`、`col-headers`、`zones`、`side-thesis`、`align` |
+| `timeline-diagram` | 多軌時間軸 | `tracks[{title,phases[{time,kind,title,body}]}]`、`align` |
 | `bench-chart` | 量化長條圖加論證面板 | `groups[{title,bars[{label,ratio,value,kind}]}]`、`thesis` |
 | `table` | 比較與對照 | `rows`、`col-w`、`aligns`、`highlight`、`h`（高度上限）；儲存格可寫 `[文字, green]` |
 | `layers` | 分層金字塔（責任分界） | `tiers[{name,sub,kind,title,body}]`、`left-w` |
@@ -55,6 +55,8 @@
 | `note` | 底部一行總結（對策、取捨） | `lines` |
 
 邊的 `kind`：`forward`（一般）、`green`（確定）、`dashed`（候選）、`blocked`（攔截，帶 ✕）。`arch-graph` 的節點兩行副標在 `rows: 4` 時會頂到框外，列數多就寫單行；`zones` 的標題會壓到第一列節點，自己留一列。節點的 `en` 是標題下一行小字英文（中英並列的專有名詞），整張圖要嘛每個節點都寫、要嘛都不寫；有 `en` 的節點副標寫一行。節點的 `badge` 壓在卡片上緣：文字離上緣太近時引擎會把整塊文字往下推到徽章下方，推了仍放不下（常見於三列圖的四行卡片：標題、`en`、兩行副標）就在建置時報錯，少放一行或加高區塊 `h`。流程圖 `numbered` 與泳道圖的序號圓點同樣處理。
+
+`flow`、`arch-graph`、`timeline-diagram` 的方框文字預設靠左；`align: center` 讓整個區塊的節點改為置中（`arch-graph` 的 `zones` 與 `side-thesis` 不受影響）。等寬方框、每行字少時置中，不然方框右半留白；帶條列（`bullet`）或長句的圖維持靠左。
 
 `shots` 的圖依長寬比縮放、靠左；寬度沒用完時右邊留白。密集的架構圖或流程圖整頁只放一張時寫 `figure: true`：圖撐滿區塊高度，有 `side` 時卡片欄接在圖的右緣、延伸到內容區右緣，圖說（標題一行、說明一行）移到卡片欄底部、與圖底對齊，`side-w` 改為卡片欄的最小寬度（圖太寬時縮圖讓出這個寬度；卡片文字放不下就加大 `side-w` 或改短文字）；沒有 `side` 時圖水平置中、圖說在圖下。`figure` 只收一張圖；卡片欄寬由引擎依圖的長寬比算，換圖不必重調。
 

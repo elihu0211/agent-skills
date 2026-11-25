@@ -135,6 +135,7 @@ def flow(
     caption: str = "",
     edge_labels: Sequence[str] | None = None,
     numbered: bool = False,
+    align: str = "left",
 ) -> float:
     """水平流程與架構管線圖：支援步驟節點、有向箭頭、邊標籤與編號徽章。"""
     cap_h = t.limits.caption_h if caption else 0.0
@@ -178,6 +179,7 @@ def flow(
             valign=MSO_ANCHOR.MIDDLE,
             pad_x=0.10,
             pad_top=pad_top,
+            align=_ALIGN[align],
         )
         if numbered:
             is_dark = it.get("kind") == "solid_dark"
@@ -385,6 +387,7 @@ def arch_graph(
     cols: int = 3,
     rows: int = 3,
     height: float = 4.35,
+    align: str = "left",
 ) -> float:
     """分區容器與有向系統拓撲圖：支援背景區域容器、網格節點、有向／阻斷邊標籤與右側結構化論證面板。"""
     has_side = bool(side_thesis)
@@ -469,6 +472,7 @@ def arch_graph(
             pad_x=0.10,
             pad_y=0.06,
             pad_top=pad_top,
+            align=_ALIGN[align],
             **text,
         )
         if b_str:
@@ -654,6 +658,7 @@ def timeline_diagram(
     y: float,
     tracks: Sequence[dict[str, Any]],
     height: float = 4.35,
+    align: str = "left",
 ) -> float:
     """雙軌時序軸與狀態推進閘門圖：視覺化展示同步波次推進、兩步探針切換或優雅關閉時間窗。"""
     for ti, ((ty, th), tr) in enumerate(zip(split(y, height, len(tracks), 0.26), tracks, strict=True)):
@@ -711,6 +716,7 @@ def timeline_diagram(
                 valign=MSO_ANCHOR.MIDDLE,
                 pad_x=0.10,
                 pad_y=0.04,
+                align=_ALIGN[align],
             )
 
             # 階段間推進箭頭
