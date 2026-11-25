@@ -102,6 +102,16 @@ cases = {
     "bad-divider": (spec([[node("a", 1, divider=1)]]), "schema", "分隔線"),
     "bad-fill": (spec([[node("a", 1, fill="blue")]]), "schema", "white, tint"),
     "bad-band-en": (spec([row], en=["一", "二", "三"]), "schema", "2 行清單"),
+    # 側欄、層內標題版型、條列面板與大型箭頭
+    "bad-labels": ({**spec([row]), "labels": "bottom"}, "schema", "層名面板"),
+    "align-without-top": (spec([row], title_align="center"), "schema", "只在 labels: top"),
+    "rail-span": ({**spec([row]), "rails": [{"id": "r", "side": "left", "bands": [1, 2], "text": ["欄"]}]},
+                  "schema", "起始層, 結束層"),
+    "rail-duplicate-id": ({**spec([row]), "rails": [{"id": "a", "side": "left", "bands": [1, 1], "text": ["欄"]}]},
+                          "schema", "id 重複"),
+    "bad-bullets": (spec([[node("a", 1, bullets=[["重點", "說明", "pink"]])]]), "schema", "1–6 個條目"),
+    "block-with-text": (spec([[node("a", 1, block="down")]]), "schema", "不放文字"),
+    "header-on-node": ({**spec([row]), "labels": "top"}, "layout", "重疊"),
     "bridge-in-graph": (spec([row], bridge="節點圖模式沒有層間說明框"), "schema", "不認得的鍵"),
 }
 with open(tmp / "cases.tsv", "w", encoding="utf-8") as index:

@@ -1,0 +1,60 @@
+# 範例：層名寫在層內上方（labels: top）、左右跨層側欄、條列面板與大型方向箭頭、接到整層的雙向虛線、兩行標題。
+title: 雲端與邊緣的雙向同步
+subtitle: （設定往下發布、量測往上回報，兩側的維運與資安同時對兩端）
+footer: 兩個方向各自設計：往下求一致，往上求不中斷
+width: 2000
+labels: top
+rails:
+  - {id: ops, side: left, bands: [1, 3], title_lines: 2, text: [維運平台, 監看與告知, （部署紀錄／, 健康狀態）]}
+  - {id: sec, side: right, bands: [1, 3], title_lines: 2, text: [資安服務, 身分與憑證, （簽發與撤銷／, 稽核軌跡）]}
+bands:
+  - id: cloud
+    color: blue
+    name: 雲端控制平面
+    en: （主導設定版本與彙整分析）
+    pad: [18, 28]
+    row_gap: 28
+    gap: 18
+    rows:
+      - - {id: catalog, at: [22, 26], text: [設定版本庫, 每次發布都有版號，可以回到任一版]}
+      - - {id: draft, at: [1, 13], title_lines: 2, text: [設定草稿與, 審核流程, 兩人覆核後才能發布]}
+        - {id: release, at: [18, 13], strong: true, accent: 2, text: [發布批次, （分批放量）, 先小範圍再全量]}
+        - {id: report, at: [35, 13], text: [彙整分析, 比較各批次的異常率]}
+  - color: gray
+    pad: [14, 14]
+    gap: 18
+    rows:
+      - - id: push
+          at: [1, 20.6]
+          color: orange
+          align: right
+          text: [往下：一次到位]
+          bullets:
+            - [整包版本一起發布, 不讓裝置混用新舊設定]
+            - [套用前先驗簽章, 驗不過就維持原版, orange]
+        - {id: down, at: [22.2, 2.7], block: down, color: orange}
+        - {id: up, at: [25.3, 2.7], block: up, color: yellow}
+        - id: pull
+          at: [28.4, 20.6]
+          color: yellow
+          text: [往上：慢慢送、不漏送]
+          bullets:
+            - [量測先寫在本機, 網路中斷照常運作]
+            - [恢復後依序補送, 重複送達只算一次, green]
+            - [回報目前版本, 雲端知道誰還沒更新]
+  - id: edge
+    color: green
+    name: 邊緣節點（離線時仍照目前版本執行）
+    title_align: center
+    pad: [76, 30]
+    rows:
+      - - {id: agent, at: [1, 15], accent: 2, text: [更新代理, （下載與切換）, 失敗就退回上一版]}
+        - {id: runtime, at: [17.5, 15], accent: 2, text: [執行環境, （照版本執行）, 版本切換不中斷服務]}
+        - {id: buffer, at: [34, 14], accent: 2, text: [本機暫存, （待送佇列）, 依時間順序保存]}
+edges:
+  - {from: draft, to: release}
+  - {from: release, to: report}
+  - {from: ops.right@0.142, to: cloud.left, style: dashed, arrow: both}
+  - {from: ops.right@0.86, to: edge.left, style: dashed, arrow: both}
+  - {from: cloud.right, to: sec.left@0.142, style: dashed, arrow: both}
+  - {from: edge.right, to: sec.left@0.86, style: dashed, arrow: both}
