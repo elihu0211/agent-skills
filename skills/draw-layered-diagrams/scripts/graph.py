@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from itertools import pairwise
+from xml.sax.saxutils import escape
 
 from base import (
     HEAD_Y,
@@ -34,7 +35,9 @@ NODE_LINE_Y = {1: (42,), 2: (37, 66), 3: (36, 66, 93)}
 TITLE_STYLE, DETAIL_STYLE, ACCENT_STYLE = (22, 800), (17, 600), (17, 800)
 # 旁註：每一行同字級，不分標題
 CALLOUT_LINE_H, CALLOUT_PAD = 27, 22
-GROUP_PAD, GROUP_TITLE_H, GROUP_TITLE_SIZE = 16, 48, 21
+GROUP_PAD, GROUP_TITLE_H, GROUP_TITLE_SIZE = 16, 48, 22
+# 分隔線多占的高度；靠左對齊時文字離框的距離
+DIVIDER_H, TEXT_INSET = 14, 28
 ROW_GAP, BAND_PAD, BAND_GAP, BAND_MIN_H = 52, 24, 52, 132
 NAME_SIZE, EN_SIZE, NOTE_SIZE = 28, 20, 17
 SIDES = ("top", "bottom", "left", "right")
@@ -47,7 +50,7 @@ DEPTH = 46
 
 TOP_KEYS = {"title", "subtitle", "footer", "width", "grid", "bands", "edges"}
 BAND_KEYS = {"color", "name", "en", "note", "dashed", "rows", "groups", "pad", "row_gap", "gap"}
-NODE_KEYS = {"id", "at", "text", "color", "dashed", "strong", "accent", "callout"}
+NODE_KEYS = {"id", "at", "text", "color", "dashed", "strong", "accent", "accent_color", "callout", "divider", "fill", "align"}
 EDGE_KEYS = {
     "from", "to", "label", "label_color", "style", "weight", "arrow", "color", "channel", "depth", "label_at", "shift"
 }
@@ -118,6 +121,17 @@ def _node(raw, where: str, grid: int, band_color: str, band_dashed: bool, issues
     for key in ("dashed", "strong", "callout"):
         if key in raw and not isinstance(raw[key], bool):
             issues.append(Issue("schema", f"{where}.{key}", "要是 true 或 false"))
+    for key, allowed in (("fill", ("white", "tint")), ("align", ("center", "left"))):
+        if key in raw and raw[key] not in allowed:
+            issues.append(Issue("schema", f"{where}.{key}", f"只有：{', '.join(allowed)}"))
+            ok = False
+    if "accent_color" in raw and raw["accent_color"] not in PALETTE:
+        issues.append(Issue("schema", f"{where}.accent_color", f"色票只有：{', '.join(PALETTE)}"))
+        ok = False
+    divider = raw.get("divider")
+    if divider is not None and not (isinstance(divider, int) and text and 1 <= divider < len(text)):
+        issues.append(Issue("schema", f"{where}.divider", "要是行號：分隔線畫在這一行下面（不能是最後一行）"))
+        ok = False
     if not ok:
         return None
     return {
@@ -129,6 +143,10 @@ def _node(raw, where: str, grid: int, band_color: str, band_dashed: bool, issues
         "strong": bool(raw.get("strong", False)),
         "accent": accent,
         "callout": bool(raw.get("callout", False)),
+        "divider": divider,
+        "fill": raw.get("fill", "tint" if raw.get("callout") else "white"),
+        "align": raw.get("align", "center"),
+        "accent_color": raw.get("accent_color", color),
     }
 
 
@@ -263,9 +281,11 @@ def validate(spec: dict) -> tuple[dict, list[Issue]]:
         name = _lines(band.get("name"), 2)
         if name is None:
             issues.append(Issue("schema", f"{where}.name", "必填：層名（字串或 2 行清單）"))
-        for key in ("en", "note"):
-            if key in band and not is_text(band[key]):
-                issues.append(Issue("schema", f"{where}.{key}", "要是非空字串"))
+        en = _lines(band["en"], 2) if "en" in band else []
+        if en is None:
+            issues.append(Issue("schema", f"{where}.en", "要是字串或 2 行清單"))
+        if "note" in band and not is_text(band["note"]):
+            issues.append(Issue("schema", f"{where}.note", "要是非空字串"))
         pad = band.get("pad", [BAND_PAD, BAND_PAD])
         if not (isinstance(pad, list) and len(pad) == 2 and all(_num(v, 8, 400) for v in pad)):
             issues.append(Issue("schema", f"{where}.pad", "要是 [上留白, 下留白]（8–400 像素）"))
@@ -310,7 +330,7 @@ def validate(spec: dict) -> tuple[dict, list[Issue]]:
             {
                 "color": color,
                 "name": name or [""],
-                "en": band.get("en", ""),
+                "en": en or [],
                 "note": band.get("note", ""),
                 "dashed": band.get("dashed") is True,
                 "rows": rows,
@@ -629,35 +649,62 @@ def draw_pill(c: Canvas, edge: dict, box: Box) -> None:
 
 def node_height(node: dict) -> int:
     count = len(node["text"])
+    extra = DIVIDER_H if node["divider"] else 0
     if node["callout"]:
-        return count * CALLOUT_LINE_H + CALLOUT_PAD
-    return {1: 68, 2: 88}.get(count, 110 + (count - 3) * EXTRA_LINE_H)
+        return count * CALLOUT_LINE_H + CALLOUT_PAD + extra
+    return {1: 68, 2: 88}.get(count, 110 + (count - 3) * EXTRA_LINE_H) + extra
+
+
+def _line_ys(node: dict) -> list[float]:
+    """各行相對於內容頂端的基線；分隔線以下的行往下讓出 DIVIDER_H。"""
+    count = len(node["text"])
+    if node["callout"]:
+        ys = [CALLOUT_PAD / 2 + k * CALLOUT_LINE_H + 19 for k in range(count)]
+    else:
+        ys = list(NODE_LINE_Y.get(count) or NODE_LINE_Y[3] + tuple(
+            NODE_LINE_Y[3][-1] + EXTRA_LINE_H * n for n in range(1, count - 2)
+        ))
+    return [y + DIVIDER_H if node["divider"] and k >= node["divider"] else y for k, y in enumerate(ys)]
 
 
 def draw_node(c: Canvas, node: dict, box: Box) -> None:
     fill, _, soft, ink, line = PALETTE[node["color"]]
-    count, dash = len(node["text"]), "8 6" if node["dashed"] else None
+    strong_ink = PALETTE[node["accent_color"]][3]
+    dash = "8 6" if node["dashed"] else None
+    background = fill if node["fill"] == "tint" else "#FFFFFF"
     if node["callout"]:
-        c.rect(box.x, box.y, box.w, box.h, 14, fill, soft, 2, dash)
-        top = box.y + (box.h - count * CALLOUT_LINE_H) / 2
-        for k, s in enumerate(node["text"]):
-            color = ink if k + 1 in node["accent"] else INK
-            c.text(box.cx, top + k * CALLOUT_LINE_H + 19, s, DETAIL_STYLE[0], color, 700, node["id"], box.w - 20)
-        return
-    stroke = ink if node["strong"] else line
-    c.rect(box.x, box.y, box.w, box.h, 12, "#FFFFFF", stroke, 3.2 if node["strong"] else 2.5, dash)
-    ys = NODE_LINE_Y.get(count) or tuple(NODE_LINE_Y[3]) + tuple(
-        NODE_LINE_Y[3][-1] + EXTRA_LINE_H * n for n in range(1, count - 2)
-    )
-    offset = (box.h - node_height(node)) / 2
+        c.rect(box.x, box.y, box.w, box.h, 14, background, soft, 2, dash)
+    else:
+        stroke = ink if node["strong"] else line
+        c.rect(box.x, box.y, box.w, box.h, 12, background, stroke, 3.2 if node["strong"] else 2.5, dash)
+    offset = box.y + (box.h - node_height(node)) / 2
+    ys = _line_ys(node)
+    if node["divider"]:
+        # 分隔線置中於上下兩行之間
+        gap_y = offset + (ys[node["divider"] - 1] + ys[node["divider"]]) / 2 - 5
+        c.parts.append(
+            f'<line x1="{box.x + 36:.1f}" y1="{gap_y:.1f}" x2="{box.x + box.w - 36:.1f}" y2="{gap_y:.1f}" '
+            f'stroke="{soft}" stroke-width="1.5"/>'
+        )
+    left = node["align"] == "left"
     for k, (s, ly) in enumerate(zip(node["text"], ys, strict=True)):
-        if k == 0:
-            (size, weight), color = TITLE_STYLE, INK
-        elif k + 1 in node["accent"]:
-            (size, weight), color = ACCENT_STYLE, ink
+        accented = k + 1 in node["accent"]
+        if node["callout"]:
+            (size, weight), color = (DETAIL_STYLE[0], 700), strong_ink if accented else INK
+        elif k == 0:
+            (size, weight), color = TITLE_STYLE, strong_ink if accented else INK
+        elif accented:
+            (size, weight), color = ACCENT_STYLE, strong_ink
         else:
             (size, weight), color = DETAIL_STYLE, MUTE
-        c.text(box.cx, box.y + offset + ly, s, size, color, weight, node["id"], box.w - 20)
+        if left:
+            c.check(node["id"], s, size, True, box.w - TEXT_INSET - 14)
+            c.parts.append(
+                f'<text x="{box.x + TEXT_INSET:.1f}" y="{offset + ly:.1f}" font-size="{size}" '
+                f'font-weight="{weight}" fill="{color}">{escape(s)}</text>'
+            )
+        else:
+            c.text(box.cx, offset + ly, s, size, color, weight, node["id"], box.w - 20)
 
 
 def group_box(group: dict, boxes: dict[str, Box]) -> Box:
@@ -668,17 +715,17 @@ def group_box(group: dict, boxes: dict[str, Box]) -> Box:
 
 
 def draw_group(c: Canvas, group: dict, box: Box) -> None:
-    ink, line = PALETTE[group["color"]][3], PALETTE[group["color"]][4]
+    line = PALETTE[group["color"]][4]
     c.rect(box.x, box.y, box.w, box.h, 14, "#FFFFFF", line, 3, "8 6" if group["dashed"] else None)
-    c.text(box.cx, box.y + 31, group["title"], GROUP_TITLE_SIZE, ink, 800, group["id"], box.w - 20)
+    c.text(box.cx, box.y + 31, group["title"], GROUP_TITLE_SIZE, INK, 800, group["id"], box.w - 20)
 
 
 def _label_lines(band: dict) -> list[tuple[str, int, str, int, int]]:
     """層名面板的各行：文字、字級、顏色、字重、行高。"""
     ink = PALETTE[band["color"]][3]
     lines = [(s, NAME_SIZE, ink, 800, 38) for s in band["name"]]
-    if band["en"]:
-        lines.append((band["en"], EN_SIZE, ink, 700, 34))
+    for k, s in enumerate(band["en"]):
+        lines.append((s, EN_SIZE, ink, 700, 34 if k == len(band["en"]) - 1 else 27))
     if band["note"]:
         lines.append((band["note"], NOTE_SIZE, MUTE, 600, 30))
     return lines
@@ -736,7 +783,9 @@ def render(m: dict) -> tuple[str, list[Issue], tuple[int, int]]:
 
     for group, box in groups:
         draw_group(c, group, box)
-    for edge, points, hops in zip(m["edges"], paths, crossings(m["edges"], paths), strict=True):
+    # 虛線先畫：虛線匯進實線主幹時，共用段看到的是實線
+    drawn = zip(m["edges"], paths, crossings(m["edges"], paths), strict=True)
+    for edge, points, hops in sorted(drawn, key=lambda item: not item[0]["dashed"]):
         draw_edge(c, edge, points, hops)
     for name, node in nodes.items():
         draw_node(c, node, boxes[name])

@@ -99,6 +99,9 @@ cases = {
     "off-grid": (spec([[node("a", 46)]]), "schema", "超出格線"),
     "duplicate-id": (spec([[node("a", 1), node("a", 16)]]), "schema", "id 重複"),
     "bad-accent": (spec([[node("a", 1, accent=3)]]), "schema", "行號"),
+    "bad-divider": (spec([[node("a", 1, divider=1)]]), "schema", "分隔線"),
+    "bad-fill": (spec([[node("a", 1, fill="blue")]]), "schema", "white, tint"),
+    "bad-band-en": (spec([row], en=["一", "二", "三"]), "schema", "2 行清單"),
     "bridge-in-graph": (spec([row], bridge="節點圖模式沒有層間說明框"), "schema", "不認得的鍵"),
 }
 with open(tmp / "cases.tsv", "w", encoding="utf-8") as index:
