@@ -42,4 +42,4 @@ edges:
   - {from: floor, to: ship, weight: thick, color: green, label: 裝箱}
   - {from: ship.bottom@0.8, to: floor.bottom@0.3, color: green, depth: 40, label: 缺件退回補揀, label_at: 0.74}
   - {from: ship.bottom@0.5, to: stock.top, weight: thick, arrow: both}
-  - {from: ship.bottom@0.2, to: invoice.top@0.8, channel: 0.8, label: 出貨確認, label_at: 0.7}
+  - {from: ship.bottom@0.2, to: invoice.top@0.8, channel: 0.7, label: 出貨確認, label_at: 0.7}

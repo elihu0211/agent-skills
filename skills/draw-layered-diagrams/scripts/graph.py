@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from itertools import pairwise
 from xml.sax.saxutils import escape
@@ -35,7 +36,7 @@ NODE_LINE_Y = {1: (42,), 2: (37, 66), 3: (36, 66, 93)}
 TITLE_STYLE, DETAIL_STYLE, ACCENT_STYLE = (22, 800), (17, 600), (17, 800)
 # 旁註：每一行同字級，不分標題
 CALLOUT_LINE_H, CALLOUT_PAD = 27, 22
-GROUP_PAD, GROUP_TITLE_H, GROUP_TITLE_SIZE = 16, 48, 22
+GROUP_TITLE_H, GROUP_TITLE_SIZE = 48, 22
 # 分隔線多占的高度；靠左對齊時文字離框的距離
 DIVIDER_H, TEXT_INSET = 14, 28
 # 側欄寬、側欄和層帶的間距（雙向箭頭要放得下）、層內標題版型的左右內距
@@ -51,6 +52,10 @@ SIDES = ("top", "bottom", "left", "right")
 EDGE_INK, EDGE_PILL_LINE = "#2F3A4C", "#CBD2DC"
 # 線寬、箭頭長、箭頭半寬
 WEIGHTS = {"normal": (2.4, 13, 7), "thick": (6.0, 20, 11)}
+# 群組框內距由最長的箭頭推得：從外面接到成員的箭頭要整支落在框線內，和框線之間還看得到一小段線身
+GROUP_PAD = max(head for _, head, _ in WEIGHTS.values()) + 8
+# 標籤和層框邊線至少隔這麼遠（壓在邊線上就分不出屬於哪一層）；建議的位移超過上限時改建議讓出空間
+FRAME_GAP, FRAME_FIX_MAX = 4, 100
 PILL_SIZE, PILL_LINE_H, PILL_PAD = 18, 24, 26
 CORNER, HOP = 10, 9
 DEPTH = 46
@@ -614,11 +619,55 @@ def _overlap_length(p, q, r, s) -> float:
     return 0.0
 
 
+def _tips(edge: dict, points) -> list:
+    """每個箭頭給「進到箭尖的那一段」：(起點, 箭尖)。"""
+    ends = [points[-2:]] if edge["arrow"] != "none" else []
+    return ends + ([points[1::-1]] if edge["arrow"] == "both" else [])
+
+
+def _head_box(edge: dict, tail, tip) -> Box:
+    """箭頭三角形的外框。"""
+    _, size, half = WEIGHTS[edge["weight"]]
+    ux, uy = _unit(tail, tip)
+    bx, by = tip[0] - ux * size, tip[1] - uy * size
+    xs, ys = (tip[0], bx - uy * half, bx + uy * half), (tip[1], by + ux * half, by - ux * half)
+    return Box(min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys))
+
+
+def _clear_of_frame(pill: Box, frame: Box) -> bool:
+    """整個在層框內或整個在層框外，兩者都離邊線至少 FRAME_GAP。"""
+    inside = (
+        pill.x >= frame.x + FRAME_GAP
+        and pill.x + pill.w <= frame.x + frame.w - FRAME_GAP
+        and pill.y >= frame.y + FRAME_GAP
+        and pill.y + pill.h <= frame.y + frame.h - FRAME_GAP
+    )
+    return inside or not pill.hits(frame, FRAME_GAP)
+
+
+def _frame_fix(edge: dict, pill: Box, frames: list[Box]) -> str:
+    """只看層框時，能讓標籤離開所有邊線的最小 shift；和其他東西壓疊仍由別條守門回報。"""
+    moves = []
+    for f in frames:
+        for y in (f.y, f.y + f.h):
+            moves += [(0, math.floor(y - FRAME_GAP - pill.y - pill.h)), (0, math.ceil(y + FRAME_GAP - pill.y))]
+        for x in (f.x, f.x + f.w):
+            moves += [(math.floor(x - FRAME_GAP - pill.x - pill.w), 0), (math.ceil(x + FRAME_GAP - pill.x), 0)]
+    for dx, dy in sorted(moves, key=lambda move: abs(move[0]) + abs(move[1])):
+        if abs(dx) + abs(dy) > FRAME_FIX_MAX:
+            break
+        if all(_clear_of_frame(Box(pill.x + dx, pill.y + dy, pill.w, pill.h), f) for f in frames):
+            sx, sy = edge["shift"]
+            return f"改成 shift: [{sx + dx:g}, {sy + dy:g}] 可離開邊線，或改 label_at"
+    return "加大 gap、pad，或改 label_at"
+
+
 def lint(
-    m: dict, boxes: dict[str, Box], members: dict, paths: list, pills: list, panel_right: float, area: Box
+    m: dict, boxes: dict[str, Box], members: dict, paths: list, pills: list, panel_right: float, area: Box,
+    frames: list[Box],
 ) -> list[Issue]:
     """版面守門：任何一條不過就不出圖。members 是「群組 id → 成員 id」，群組和自己的成員不算重疊；
-    area 是層帶區域，連線與標籤不能跑出去。"""
+    area 是層帶區域，連線與標籤不能跑出去；frames 是由上而下的層框。"""
     issues: list[Issue] = []
     names = list(boxes)
     for i, a in enumerate(names):
@@ -639,10 +688,7 @@ def lint(
             if min(p[1], q[1]) < area.y or max(p[1], q[1]) > area.y + area.h:
                 issues.append(Issue("layout", where, "連線跑出層帶區域（會壓到標題或結論）：加大首末層的 pad，或調小 depth"))
         _, head, _ = WEIGHTS[edge["weight"]]
-        tips = ([points[-2:]] if edge["arrow"] != "none" else []) + (
-            [points[1::-1]] if edge["arrow"] == "both" else []
-        )
-        if any(_length(p, q) < head + 5 for p, q in tips):
+        if any(_length(p, q) < head + 5 for p, q in _tips(edge, points)):
             issues.append(Issue("layout", where, "箭頭前的線段太短：加大間距、depth，或調 channel"))
     for i, (ea, pa) in enumerate(zip(m["edges"], paths, strict=True)):
         for eb, pb in list(zip(m["edges"], paths, strict=True))[i + 1 :]:
@@ -661,11 +707,21 @@ def lint(
         for j, other in labelled[n + 1 :]:
             if pill.hits(other, 4):
                 issues.append(Issue("layout", where, f"標籤「{text}」和 {m['edges'][j]['where']} 的標籤重疊"))
+        for n_frame, frame in enumerate(frames, 1):
+            if not _clear_of_frame(pill, frame):
+                fix = _frame_fix(m["edges"][i], pill, frames)
+                issues.append(Issue("layout", where, f"標籤「{text}」壓到第 {n_frame} 層的層框邊線：{fix}"))
+                break
         for j, points in enumerate(paths):
-            if j == i or _same_port(m["edges"][i], paths[i], m["edges"][j], points):
+            other = m["edges"][j]
+            if any(pill.hits(_head_box(other, tail, tip), 2) for tail, tip in _tips(other, points)):
+                whose = "自己" if j == i else f" {other['where']} "
+                issues.append(Issue("layout", where, f"標籤「{text}」蓋住{whose}的箭頭：改 label_at、shift，或拉開兩端節點"))
+                continue
+            if j == i or _same_port(m["edges"][i], paths[i], other, points):
                 continue
             if any(pill.crossed_by(p, q, 2) for p, q in _segments(points)):
-                issues.append(Issue("layout", where, f"標籤「{text}」壓到 {m['edges'][j]['where']} 的線"))
+                issues.append(Issue("layout", where, f"標籤「{text}」壓到 {other['where']} 的線"))
     return issues
 
 
@@ -1011,7 +1067,9 @@ def render(m: dict) -> tuple[str, list[Issue], tuple[int, int]]:
     pills = [pill_box(e, p) if e["label"] else None for e, p in zip(m["edges"], paths, strict=True)]
     h = draw_footer(c, w, bottom_edge, m["footer"])
     area = Box(0, HEAD_Y, w, bottom_edge + 14 - HEAD_Y)
-    c.issues.extend(lint(m, boxes, members, paths, pills, -1e9 if open_style else x0 + LABEL_W, area))
+    band_frames = [Box(x0, top, x1 - x0, height) for top, height, _, _ in frames]
+    panel_right = -1e9 if open_style else x0 + LABEL_W
+    c.issues.extend(lint(m, boxes, members, paths, pills, panel_right, area, band_frames))
 
     for group, box in groups:
         draw_group(c, group, box)
