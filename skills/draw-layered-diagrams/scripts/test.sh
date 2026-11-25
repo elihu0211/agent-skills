@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# draw-layered-diagrams 測試：--help、每個範例 --check 通過、目錄與多檔的規格探索與結束碼、溢字與規格錯誤以結束碼 1 擋下並回報規則、
+# draw-layered-diagrams 測試：--help、每個範例 --check 通過、目錄與多檔的規格探索與結束碼、PNG 內容指紋、溢字與規格錯誤以結束碼 1 擋下並回報規則、
 # 節點圖的版面守門逐條擋得下、交叉畫跳線弧、--json 可解析、--svg 是合法 XML；有 Chrome 時另驗 PNG 尺寸為畫布兩倍，沒有就略過這一段。
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -219,7 +219,68 @@ for case in "-o $tmp/x.png $repo" "--check $repo/docs/ok.yml $tmp/nope.yml"; do
   [ "$rc" -eq 2 ] || { echo "FAIL: draw.py $case 應以 2 結束，實得 $rc" >&2; exit 1; }
 done
 
-# 8. 有 Chrome 才驗 PNG：尺寸要是畫布的兩倍
+# 8. PNG 內容指紋：用假的 Chrome 走完整個流程，沒有 Chrome 的機器也驗得到
+cat > "$tmp/fake-chrome" <<'PY'
+#!/usr/bin/env python3
+# 把一張 1×1 PNG 寫到 --screenshot 指定的位置
+import struct, sys, zlib
+def chunk(kind, data):
+    return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+out = next(a.split("=", 1)[1] for a in sys.argv[1:] if a.startswith("--screenshot="))
+head = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)
+body = chunk(b"IHDR", head) + chunk(b"IDAT", zlib.compress(b"\0\xff\xff\xff")) + chunk(b"IEND", b"")
+open(out, "wb").write(b"\x89PNG\r\n\x1a\n" + body)
+PY
+chmod +x "$tmp/fake-chrome"
+fresh="$tmp/fresh"
+mkdir "$fresh"
+cp assets/examples/three-tier-web.yml "$fresh/d.yml"
+
+expect_stale() {  # $1：訊息要含的字
+  set +e
+  uv run "$DRAW" --check --verify-png --json "$fresh" > "$tmp/stale.json"
+  rc=$?
+  set -e
+  [ "$rc" -eq 1 ] || { echo "FAIL: 應以 PNG 過期擋下（$1），實得結束碼 $rc" >&2; exit 1; }
+  python3 - "$tmp/stale.json" "$1" <<'PY'
+import json, sys
+issues = json.load(open(sys.argv[1], encoding="utf-8"))["issues"]
+assert [i["rule"] for i in issues] == ["png"] and sys.argv[2] in issues[0]["message"], (sys.argv[2], issues)
+PY
+}
+
+expect_stale "沒有這張 PNG"
+# 指紋要跨行程重現：畫的時候與比對的時候用不同的雜湊種子
+PYTHONHASHSEED=1 CHROME="$tmp/fake-chrome" uv run "$DRAW" "$fresh" > /dev/null
+PYTHONHASHSEED=2 uv run "$DRAW" --check --verify-png "$fresh" > /dev/null || { echo "FAIL: 剛畫好的 PNG 應是最新" >&2; exit 1; }
+cp "$fresh/d.png" "$tmp/good.png"
+
+# Chrome 回 0 卻沒寫出圖：要失敗，舊 PNG 原封不動（不能蓋上新指紋）
+sed 's/^title: .*/title: 改過的標題/' assets/examples/three-tier-web.yml > "$fresh/d.yml"
+set +e
+CHROME=true uv run "$DRAW" "$fresh/d.yml" > /dev/null 2>&1
+rc=$?
+set -e
+[ "$rc" -eq 2 ] || { echo "FAIL: 沒截到圖應以 2 結束，實得 $rc" >&2; exit 1; }
+cmp -s "$fresh/d.png" "$tmp/good.png" || { echo "FAIL: 沒截到圖時舊 PNG 被改寫" >&2; exit 1; }
+
+# 改了規格沒重畫：守門擋下；單純的 --check 照樣通過（改規格途中要能用）
+expect_stale "不是由目前的規格與引擎畫出"
+uv run "$DRAW" --check "$fresh" > /dev/null || { echo "FAIL: 不加 --verify-png 時不該看 PNG" >&2; exit 1; }
+
+"$tmp/fake-chrome" "--screenshot=$fresh/d.png"
+expect_stale "沒有內容指紋"
+echo "not a png" > "$fresh/d.png"
+expect_stale "不是 PNG"
+
+set +e
+uv run "$DRAW" --verify-png "$fresh" > /dev/null 2>&1
+rc=$?
+set -e
+[ "$rc" -eq 2 ] || { echo "FAIL: --verify-png 沒配 --check 應以 2 結束，實得 $rc" >&2; exit 1; }
+echo "PNG fingerprint check OK"
+
+# 9. 有 Chrome 才驗 PNG：尺寸要是畫布的兩倍
 uv run "$DRAW" assets/examples/three-tier-web.yml --check --json > "$tmp/size.json"
 set +e
 uv run "$DRAW" assets/examples/three-tier-web.yml -o "$tmp/web.png" > /dev/null 2> "$tmp/png.err"
@@ -240,6 +301,8 @@ pw, ph = struct.unpack(">II", data[16:24])
 assert (pw, ph) == (w * 2, h * 2), ((pw, ph), (w, h))
 print(f"PNG check OK: {pw}x{ph}")
 PY
+  uv run "$DRAW" assets/examples/three-tier-web.yml --check --verify-png -o "$tmp/web.png" > /dev/null \
+    || { echo "FAIL: 真的 Chrome 畫出的 PNG 應帶有效指紋" >&2; exit 1; }
 fi
 
 echo "draw-layered-diagrams tests passed"
