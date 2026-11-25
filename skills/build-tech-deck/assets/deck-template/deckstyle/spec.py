@@ -111,6 +111,8 @@ def check_table(rows: Sequence[Sequence[Any]], col_w: Sequence[float]) -> None:
 # 每個區塊：req 必填、opt 選填、lists 是「欄位 → 該欄每個元素的欄位表」（可巢狀）、kinds 是值須為卡片 kind 的欄位、
 # enums 是值須在名單內的欄位。`h`（固定高度，英吋）每個區塊都收。新增區塊要同時改這裡、blocks.py 與 outline.py。
 
+#: 連線的箭頭：只在終點（預設）或兩端
+EDGE_ARROWS = ("forward", "both")
 #: 圖框區塊（流程、拓撲、時序圖）方框內文字的水平對齊
 NODE_ALIGNS = ("left", "center")
 _TXT = {"req": ("title",), "opt": ("kind", "body", "bullet"), "kinds": ("kind",)}  # 帶標題的卡片
@@ -148,7 +150,11 @@ BLOCK_SCHEMA: dict[str, dict[str, Any]] = {
                 "opt": ("kind", "sub", "en", "col_span", "row_span", "inset", "badge", "tfs", "bfs", "bullet"),
                 "kinds": ("kind",),
             },
-            "edges": {"req": ("from", "to"), "opt": ("kind", "label"), "enums": {"kind": EDGE_KINDS}},
+            "edges": {
+                "req": ("from", "to"),
+                "opt": ("kind", "label", "arrow"),
+                "enums": {"kind": EDGE_KINDS, "arrow": EDGE_ARROWS},
+            },
             "zones": {
                 "req": ("col", "row"),
                 "opt": ("col_span", "row_span", "kind", "title", "sub"),

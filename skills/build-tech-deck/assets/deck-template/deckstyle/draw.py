@@ -98,18 +98,21 @@ def seg(
     weight: float | None = None,
     dash: bool = False,
     arrow: bool = True,
+    start_arrow: bool = False,
 ) -> Any:
-    """繪製由 (x1, y1) 指向 (x2, y2) 的直線或箭頭連線。"""
+    """繪製由 (x1, y1) 指向 (x2, y2) 的直線或箭頭連線；`arrow` 是終點箭頭，`start_arrow` 另在起點加箭頭。"""
     c = slide.shapes.add_connector(MSO_CONNECTOR.STRAIGHT, Inches(x1), Inches(y1), Inches(x2), Inches(y2))
     c.line.color.rgb = color or t.ink
     c.line.width = Pt(weight if weight is not None else t.line_strong)
     if dash:
         c.line.dash_style = MSO_LINE.DASH
-    if arrow:
-        ln = c.line._get_or_add_ln()
-        for old in ln.findall(qn("a:tailEnd")):
-            ln.remove(old)
-        ln.append(ln.makeelement(qn("a:tailEnd"), {"type": "triangle", "w": "med", "len": "med"}))
+    # OOXML 規定 headEnd（起點）排在 tailEnd（終點）之前
+    for tag, wanted in (("a:headEnd", start_arrow), ("a:tailEnd", arrow)):
+        if wanted:
+            ln = c.line._get_or_add_ln()
+            for old in ln.findall(qn(tag)):
+                ln.remove(old)
+            ln.append(ln.makeelement(qn(tag), {"type": "triangle", "w": "med", "len": "med"}))
     return c
 
 
@@ -372,6 +375,9 @@ def card_stack(
         )
 
 
+BLOCK_MARK_D = 0.22  # 阻斷邊「✕」徽章直徑（英吋）
+
+
 def edge_overlay(
     t: Theme,
     slide: Any,
@@ -384,7 +390,7 @@ def edge_overlay(
 ) -> None:
     """連線上的附加物：阻斷邊中點的「✕」徽章，與邊標籤（box 是標籤的 x, y, w, h）。"""
     if blocked:
-        badge(t, slide, *mark, "✕", fill=t.alert, ink=t.white, d=0.22, fs=9.5)
+        badge(t, slide, *mark, "✕", fill=t.alert, ink=t.white, d=BLOCK_MARK_D, fs=9.5)
     if label:
         text_box(t, slide, *box, label, size=t.type.label, color=color, bold=True, **text_kw)
 

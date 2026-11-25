@@ -25,6 +25,7 @@ from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.util import Inches, Pt
 
 from .draw import (
+    BLOCK_MARK_D,
     alt_text,
     badge,
     badge_fill,
@@ -44,7 +45,7 @@ from .draw import (
     split,
     text_box,
 )
-from .measure import REFLOW, line_height, wrap_count
+from .measure import REFLOW, line_height, text_em, wrap_count
 from .spec import SpecError, as_lines, check_table
 from .theme import Theme
 
@@ -53,6 +54,12 @@ _ALIGN = {"left": PP_ALIGN.LEFT, "center": PP_ALIGN.CENTER, "right": PP_ALIGN.RI
 _BADGE_GAP = 0.02  # 徽章與卡片文字之間至少留的空白（英吋）
 _PILL_H = 0.22  # 跨在卡片上緣的膠囊徽章高，一半壓進卡片
 _DOT_D = 0.25  # 圓形序號徽章直徑
+_SAME_COLUMN = 0.35  # 兩節點中心的水平差小於此值時，連線走直向
+_EDGE_INSET = 0.03  # 直向連線兩端離節點邊緣的距離
+_ARROW_ROOM = 0.1  # 「✕」徽章兩側各留給連線與箭頭的長度
+_LABEL_MARGIN = 0.05  # 橫向邊標籤兩側與節點邊框的留白
+#: 直向阻斷邊需要的列距：標準大小的「✕」放在連線中點，箭頭仍完整露出
+_BLOCKED_ROW_GAP = BLOCK_MARK_D + 2 * (_ARROW_ROOM + _EDGE_INSET)
 
 
 def _pad_top_below_badge(
@@ -375,6 +382,48 @@ def swimlane(
     return height
 
 
+_OVERLAP_TOL = 0.01  # 邊界相貼不算重疊（英吋）
+
+Rect = tuple[float, float, float, float]  # x, y, 寬, 高
+
+
+def _intersects(a: Rect, b: Rect) -> bool:
+    return (
+        a[0] < b[0] + b[2] - _OVERLAP_TOL
+        and b[0] < a[0] + a[2] - _OVERLAP_TOL
+        and a[1] < b[1] + b[3] - _OVERLAP_TOL
+        and b[1] < a[1] + a[3] - _OVERLAP_TOL
+    )
+
+
+def _label_rect(t: Theme, label: str, box: Rect, *, centered: bool, middle: bool) -> Rect:
+    """邊標籤實際佔的字框：標籤框比字寬、可以伸到節點上方，重不重疊要看字。"""
+    width = text_em(label) * t.type.label * (1 + t.lint.bold_extra) / 72
+    height = line_height(t.type.label, t.type.line_em, 1.15)
+    x, y, w, h = box
+    return (x + (w - width) / 2 if centered else x, y + (h - height) / 2 if middle else y, width, height)
+
+
+def _check_edge_clear(
+    ed: dict[str, Any],
+    nodes: dict[str, Rect],
+    titles: dict[str, str],
+    segments: Sequence[tuple[tuple[float, float], tuple[float, float]]],
+    label: Rect | None,
+) -> None:
+    """字不能被擋住：邊的標籤不能壓到任何節點，連線不能穿過兩端以外的節點。"""
+    name = f"邊 {ed['from']}→{ed['to']}"
+    for node_id, node in nodes.items():
+        if label is not None and _intersects(label, node):
+            raise SpecError(f"{name} 的標籤「{ed['label']}」會壓到節點「{titles[node_id]}」：縮短標籤或調整節點位置")
+        if node_id in (ed["from"], ed["to"]):
+            continue
+        for (x1, y1), (x2, y2) in segments:
+            line = (min(x1, x2), min(y1, y2), max(abs(x2 - x1), 2 * _OVERLAP_TOL), max(abs(y2 - y1), 2 * _OVERLAP_TOL))
+            if _intersects(line, node):
+                raise SpecError(f"{name} 的連線穿過節點「{titles[node_id]}」：調整節點位置")
+
+
 def arch_graph(
     t: Theme,
     slide: Any,
@@ -396,7 +445,15 @@ def arch_graph(
     graph_w = t.layout.width - side_w - side_gap
 
     hdr_h = 0.42 if col_headers else 0.0
-    c_gap = 0.78 if (not has_side and cols == 3) else 0.68
+    placed = {nd["id"]: nd for nd in nodes}
+    ends = [(ed, placed.get(ed["from"]), placed.get(ed["to"])) for ed in edges or []]
+    # 欄距由版面上要放的東西決定：橫向邊的標籤放在兩節點之間，不能壓到方框
+    label_gaps = [
+        text_em(str(ed["label"])) * t.type.label * (1 + t.lint.bold_extra) / 72 + 2 * _LABEL_MARGIN
+        for ed, a, b in ends
+        if ed.get("label") and a is not None and b is not None and a["row"] == b["row"]
+    ]
+    c_gap = max([0.78 if (not has_side and cols == 3) else 0.68, *label_gaps])
     cw = (graph_w - c_gap * (cols - 1)) / cols
     for c_idx, h_text in enumerate(col_headers or []):
         text_box(
@@ -405,7 +462,21 @@ def arch_graph(
 
     gy = y + hdr_h
     gh = height - hdr_h
+
+    def center_x(nd: dict[str, Any]) -> float:
+        span = nd.get("col_span", 1)
+        return nd["col"] * (cw + c_gap) + (span * cw + (span - 1) * c_gap) / 2
+
+    def crosses_rows_blocked(ed: dict[str, Any]) -> bool:
+        a, b = placed.get(ed["from"]), placed.get(ed["to"])
+        if ed.get("kind") != "blocked" or a is None or b is None:
+            return False
+        return a["row"] != b["row"] and abs(center_x(a) - center_x(b)) < _SAME_COLUMN
+
+    # 列距由版面上要放的東西決定：直向阻斷邊的列間要放得下「✕」與箭頭
     r_gap = 0.34 if rows >= 3 else 0.42
+    if any(crosses_rows_blocked(ed) for ed in edges or []):
+        r_gap = max(r_gap, _BLOCKED_ROW_GAP)
     rh = (gh - r_gap * (rows - 1)) / rows
 
     def cell_rect(c: int, r: int, cs: int = 1, rs: int = 1) -> tuple[float, float, float, float]:
@@ -493,6 +564,7 @@ def arch_graph(
                 pill(t, slide, nx + 0.06, ny - _PILL_H / 2, pw, _PILL_H, b_str, kind=pill_kind(b_kind), fs=9.0)
 
     # 3. 繪製有向邊與邊標籤
+    titles = {nd["id"]: str(nd["title"]) for nd in nodes}
     for ed in edges or []:
         for end in ("from", "to"):
             if ed[end] not in node_boxes:
@@ -506,11 +578,13 @@ def arch_graph(
         ecolor = t.alert if blocked else (t.green if ekind == "green" else (t.muted if ekind == "dashed" else t.ink))
         edash = ekind in ("dashed", "blocked")
         label = ed.get("label")
+        both = ed.get("arrow") == "both"  # 來回兩個方向畫成一條雙向箭頭
 
         if abs((ay + ah / 2) - (by + bh / 2)) < 0.25:  # 水平連線
             my = (ay + ah / 2 + by + bh / 2) / 2
             x1, x2 = (ax + aw + 0.03, bx - 0.03) if bx > ax else (ax - 0.03, bx + bw + 0.03)
-            seg(t, slide, x1, my, x2, my, color=ecolor, dash=edash)
+            seg(t, slide, x1, my, x2, my, color=ecolor, dash=edash, start_arrow=both)
+            text_at = (min(x1, x2) - 0.22, my - (0.34 if blocked else 0.28), abs(x2 - x1) + 0.44, 0.22)
             edge_overlay(
                 t,
                 slide,
@@ -518,13 +592,16 @@ def arch_graph(
                 ecolor,
                 ((x1 + x2) / 2, my),
                 label,
-                (min(x1, x2) - 0.22, my - (0.34 if blocked else 0.28), abs(x2 - x1) + 0.44, 0.22),
+                text_at,
                 align=PP_ALIGN.CENTER,
             )
-        elif abs((ax + aw / 2) - (bx + bw / 2)) < 0.35:  # 垂直連線
+            segments = [((x1, my), (x2, my))]
+            text_rect = _label_rect(t, label, text_at, centered=True, middle=False) if label else None
+        elif abs((ax + aw / 2) - (bx + bw / 2)) < _SAME_COLUMN:  # 垂直連線
             mx = (ax + aw / 2 + bx + bw / 2) / 2
-            y1, y2 = (ay + ah + 0.03, by - 0.03) if by > ay else (ay - 0.03, by + bh + 0.03)
-            seg(t, slide, mx, y1, mx, y2, color=ecolor, dash=edash)
+            y1, y2 = (ay + ah + _EDGE_INSET, by - _EDGE_INSET) if by > ay else (ay - _EDGE_INSET, by + bh + _EDGE_INSET)
+            seg(t, slide, mx, y1, mx, y2, color=ecolor, dash=edash, start_arrow=both)
+            text_at = (mx + (0.16 if blocked else 0.08), min(y1, y2), 1.80, abs(y2 - y1))
             edge_overlay(
                 t,
                 slide,
@@ -532,16 +609,19 @@ def arch_graph(
                 ecolor,
                 (mx, (y1 + y2) / 2),
                 label,
-                (mx + (0.16 if blocked else 0.08), min(y1, y2), 1.80, abs(y2 - y1)),
+                text_at,
                 anchor=MSO_ANCHOR.MIDDLE,
             )
+            segments = [((mx, y1), (mx, y2))]
+            text_rect = _label_rect(t, label, text_at, centered=False, middle=True) if label else None
         else:  # L 型正交連線：由起點右側／左側水平連至終點中線，再垂直進入終點
             ay_m = ay + ah / 2
             bx_m = bx + bw / 2
             x_start = (ax + aw + 0.02) if bx_m > ax + aw / 2 else (ax - 0.02)
             y_end = (by - 0.03) if by > ay else (by + bh + 0.03)
-            seg(t, slide, x_start, ay_m, bx_m, ay_m, color=ecolor, dash=edash, arrow=False)
+            seg(t, slide, x_start, ay_m, bx_m, ay_m, color=ecolor, dash=edash, arrow=False, start_arrow=both)
             seg(t, slide, bx_m, ay_m, bx_m, y_end, color=ecolor, dash=edash)
+            text_at = (min(x_start, bx_m), ay_m - 0.25, abs(bx_m - x_start), 0.22)
             edge_overlay(
                 t,
                 slide,
@@ -549,9 +629,12 @@ def arch_graph(
                 ecolor,
                 (bx_m, (ay_m + y_end) / 2),
                 label,
-                (min(x_start, bx_m), ay_m - 0.25, abs(bx_m - x_start), 0.22),
+                text_at,
                 align=PP_ALIGN.CENTER,
             )
+            segments = [((x_start, ay_m), (bx_m, ay_m)), ((bx_m, ay_m), (bx_m, y_end))]
+            text_rect = _label_rect(t, label, text_at, centered=True, middle=False) if label else None
+        _check_edge_clear(ed, node_boxes, titles, segments, text_rect)
 
     # 4. 右側結構化論證面板（side_thesis）
     if side_thesis:
