@@ -261,12 +261,14 @@ def card(
     pad_y: float = 0.08,
     en: str | None = None,
     pad_top: float | None = None,
+    align: PP_ALIGN = PP_ALIGN.LEFT,
 ) -> Any:
     """繪製單一語義卡片：圓角、細線、語義強調色。
 
     `en` 是標題下一行較小的英文名稱（中英並列的專有名詞，如「生產系譜」下的 Production Genealogy）：
     字級約標題的七成、不加粗、灰字（深底卡片用內文色），與標題之間不留段距。
     `pad_top` 單獨指定上邊界（英吋），預設同 `pad_y`；卡片上緣疊著徽章時，用它把文字推到徽章下方。
+    `align` 是標題、英文名與內文共用的水平對齊。
     """
     spec = t.cards.get(kind, t.cards["gray"])
     sh = _rounded(t, slide, x, y, w, h, spec.fill, spec.line, spec.weight)
@@ -280,19 +282,19 @@ def card(
     items = as_lines(body)
     if title:
         p0 = tf.paragraphs[0]
-        p0.alignment = PP_ALIGN.LEFT
+        p0.alignment = align
         p0.space_after = Pt(_PARA_GAP if items and not en else 0)
         p0.line_spacing = _TITLE_SPACING
         runs(t, p0, title, tfs, spec.head, bold=True)
         if en:
             pe = tf.add_paragraph()
-            pe.alignment = PP_ALIGN.LEFT
+            pe.alignment = align
             pe.space_after = Pt(_PARA_GAP if items else 0)
             pe.line_spacing = _EN_SPACING
             runs(t, pe, en, round(tfs * _EN_RATIO * 2) / 2, spec.ink if kind == "solid_dark" else t.muted, bold=False)
     for i, item in enumerate(items):
         p = tf.paragraphs[0] if (i == 0 and not title) else tf.add_paragraph()
-        p.alignment = PP_ALIGN.LEFT
+        p.alignment = align
         p.space_after = Pt(_PARA_GAP if i < len(items) - 1 else 0)
         p.line_spacing = _BODY_SPACING
         runs(t, p, ("・" + item) if bullet else item, bfs, spec.ink, bold=False)

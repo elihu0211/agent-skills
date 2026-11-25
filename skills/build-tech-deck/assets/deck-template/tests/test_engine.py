@@ -13,6 +13,7 @@ import pytest
 from conftest import TEMPLATE, one_slide
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
+from pptx.enum.text import PP_ALIGN
 from pptx.util import Inches
 
 from deckstyle import design, engine
@@ -413,6 +414,42 @@ def test_numbered_flow_step_reports_text_under_its_badge(build_spec: Build) -> N
     items = [{"title": "一二三四五六", "body": ["第一行", "第二行", "第三行", "第四行"], "kind": "blue"}]
     with pytest.raises(SpecError, match="徽章"):
         build_spec(one_slide([("flow", {"items": items, "numbered": True, "h": 1.0})]))
+
+
+def _diagram(kind: str) -> dict[str, Any]:
+    box = {"title": "甲節點", "body": "一行說明", "kind": "blue"}
+    return {
+        "flow": {"items": [box, {**box, "title": "乙節點"}]},
+        "arch_graph": {
+            "cols": 2,
+            "rows": 1,
+            "nodes": [
+                {"id": "a", "col": 0, "row": 0, "title": "甲節點", "en": "Node A", "sub": "一行說明"},
+                {"id": "b", "col": 1, "row": 0, "title": "乙節點", "sub": "一行說明"},
+            ],
+        },
+        "timeline_diagram": {"tracks": [{"title": "期程", "phases": [{**box, "time": "第 1 週"}]}]},
+    }[kind]
+
+
+@pytest.mark.parametrize("kind", ["flow", "arch_graph", "timeline_diagram"])
+@pytest.mark.parametrize(("align", "expected"), [(None, PP_ALIGN.LEFT), ("center", PP_ALIGN.CENTER)])
+def test_diagram_boxes_align_left_unless_centered(build_spec: Build, kind: str, align: str | None, expected) -> None:
+    """圖框區塊的 `align` 管方框內每一段（標題、英文名、內文）；沒寫時維持靠左。"""
+    block = _diagram(kind) | ({} if align is None else {"align": align})
+    out = build_spec(one_slide([(kind, block)]))
+    boxes = [
+        sh
+        for sh in Presentation(str(out)).slides[1].shapes
+        if sh.has_text_frame and sh.text_frame.text.startswith("甲節點")
+    ]
+    assert boxes
+    assert {p.alignment for sh in boxes for p in sh.text_frame.paragraphs} == {expected}
+
+
+def test_unknown_diagram_align_is_rejected(build_spec: Build) -> None:
+    with pytest.raises(SpecError, match="align"):
+        build_spec(one_slide([("flow", _diagram("flow") | {"align": "right"})]))
 
 
 _REFS = [  # 示例書目：夠長，在版心寬裡會折成兩行
