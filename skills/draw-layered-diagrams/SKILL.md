@@ -15,7 +15,7 @@ compatibility: 需要 uv（pyyaml 由腳本的 PEP 723 宣告安裝）與 Google
 
 - 消費端 repo 的 `AGENTS.md`：它的圖檔位置、命名與提交規則優先於本技能。
 - 寫規格前讀 [references/spec.md](references/spec.md)：鍵、方塊上限、字數參考與色票用途。
-- 照範例起手：[兩欄對照、虛線層與說明框](assets/examples/osi-bms-iiot.yml)、[單欄與方向箭頭](assets/examples/three-tier-web.yml)、[節點圖：跨層連線、群組、旁註與回饋線](assets/examples/order-fulfilment-graph.yml)。
+- 照範例起手：[兩欄對照、虛線層與說明框](assets/examples/osi-bms-iiot.yml)、[單欄與方向箭頭](assets/examples/three-tier-web.yml)、[節點圖：跨層連線、群組、旁註與回饋線](assets/examples/order-fulfilment-graph.yml)、[節點圖：跨層側欄、條列面板與大型箭頭](assets/examples/edge-cloud-loop-graph.yml)。
 
 ## 步驟
 

@@ -38,6 +38,13 @@ CALLOUT_LINE_H, CALLOUT_PAD = 27, 22
 GROUP_PAD, GROUP_TITLE_H, GROUP_TITLE_SIZE = 16, 48, 22
 # 分隔線多占的高度；靠左對齊時文字離框的距離
 DIVIDER_H, TEXT_INSET = 14, 28
+# 側欄寬、側欄和層帶的間距（雙向箭頭要放得下）、層內標題版型的左右內距
+RAIL_W, RAIL_GAP, OPEN_INSET = 260, 64, 26
+# 條列面板：膠囊標題列高、每個條目的基本與最大行距
+PANEL_HEAD_H, PANEL_ITEM_H, PANEL_ITEM_MAX, PANEL_TAIL = 82, 80, 96, 6
+PANEL_PILL_SIZE, PANEL_HEAD_SIZE, PANEL_DETAIL_SIZE = 20, 18, 16
+# 大型方向箭頭：身寬、頭寬、頭高
+BLOCK_SHAFT, BLOCK_HEAD_W, BLOCK_HEAD_H = 32, 64, 46
 ROW_GAP, BAND_PAD, BAND_GAP, BAND_MIN_H = 52, 24, 52, 132
 NAME_SIZE, EN_SIZE, NOTE_SIZE = 28, 20, 17
 SIDES = ("top", "bottom", "left", "right")
@@ -48,13 +55,14 @@ PILL_SIZE, PILL_LINE_H, PILL_PAD = 18, 24, 26
 CORNER, HOP = 10, 9
 DEPTH = 46
 
-TOP_KEYS = {"title", "subtitle", "footer", "width", "grid", "bands", "edges"}
-BAND_KEYS = {"color", "name", "en", "note", "dashed", "rows", "groups", "pad", "row_gap", "gap"}
-NODE_KEYS = {"id", "at", "text", "color", "dashed", "strong", "accent", "accent_color", "callout", "divider", "fill", "align"}
+TOP_KEYS = {"title", "subtitle", "footer", "width", "grid", "labels", "rails", "bands", "edges"}
+BAND_KEYS = {"id", "color", "name", "title_align", "en", "note", "dashed", "rows", "groups", "pad", "row_gap", "gap"}
+NODE_KEYS = {"id", "at", "text", "color", "dashed", "strong", "accent", "accent_color", "callout", "divider", "fill", "align", "title_lines", "bullets", "block"}
 EDGE_KEYS = {
     "from", "to", "label", "label_color", "style", "weight", "arrow", "color", "channel", "depth", "label_at", "shift"
 }
 GROUP_KEYS = {"id", "title", "wraps", "color", "dashed"}
+RAIL_KEYS = {"id", "side", "bands", "color", "text", "title_lines"}
 
 
 def is_graph(spec) -> bool:
@@ -84,13 +92,64 @@ def _lines(v, most: int) -> list[str] | None:
     return None
 
 
+def _valid_id(v) -> bool:
+    return is_text(v) and not any(ch in v for ch in ".@ ")
+
+
+def _bullets(raw, where: str, issues: list[Issue]) -> list[tuple] | None:
+    """條列面板的條目：[重點]、[重點, 說明] 或 [重點, 說明, 說明的色票]。"""
+    ok = isinstance(raw, list) and 1 <= len(raw) <= 6
+    out = []
+    for item in raw if ok else []:
+        parts = [item] if isinstance(item, str) else item
+        good = isinstance(parts, list) and 1 <= len(parts) <= 3 and all(is_text(s) for s in parts)
+        if not good or (len(parts) == 3 and parts[2] not in PALETTE):
+            ok = False
+            break
+        out.append((parts[0], parts[1] if len(parts) > 1 else "", parts[2] if len(parts) > 2 else None))
+    if not ok:
+        issues.append(Issue("schema", where, "要是 1–6 個條目：[重點, 說明?, 色票?]"))
+        return None
+    return out
+
+
+def _rail(raw, where: str, count: int, issues: list[Issue]) -> dict | None:
+    if not isinstance(raw, dict):
+        issues.append(Issue("schema", where, "側欄要是對照表：{id, side, bands, text}"))
+        return None
+    _unknown(raw, RAIL_KEYS, where, issues)
+    text = _lines(raw.get("text"), 8)
+    span = raw.get("bands")
+    title_lines = raw.get("title_lines", 1)
+    color = raw.get("color", "gray")
+    ok = True
+    for good, key, message in (
+        (_valid_id(raw.get("id")), "id", "必填：不含空白、「.」與「@」的字串"),
+        (raw.get("side") in ("left", "right"), "side", "只有：left, right"),
+        (
+            isinstance(span, list) and len(span) == 2 and all(isinstance(n, int) for n in span)
+            and 1 <= span[0] <= span[1] <= count,
+            "bands", f"要是 [起始層, 結束層]，層從 1 起、最多 {count}",
+        ),
+        (text is not None, "text", "必填：1–8 行字串"),
+        (isinstance(title_lines, int) and 1 <= title_lines <= len(text or [""]), "title_lines", "要是 1 到行數之間的整數"),
+        (color in PALETTE, "color", f"色票只有：{', '.join(PALETTE)}"),
+    ):
+        if not good:
+            issues.append(Issue("schema", f"{where}.{key}", message))
+            ok = False
+    if not ok:
+        return None
+    return {"id": raw["id"], "side": raw["side"], "bands": span, "color": color, "text": text, "title_lines": title_lines}
+
+
 def _node(raw, where: str, grid: int, band_color: str, band_dashed: bool, issues: list[Issue]) -> dict | None:
     if not isinstance(raw, dict):
         issues.append(Issue("schema", where, "節點要是對照表：{id, at, text}"))
         return None
     _unknown(raw, NODE_KEYS, where, issues)
     ok = True
-    if not is_text(raw.get("id")) or any(ch in raw.get("id", "") for ch in ".@ "):
+    if not _valid_id(raw.get("id")):
         issues.append(Issue("schema", f"{where}.id", "必填：不含空白、「.」與「@」的字串"))
         ok = False
     at = raw.get("at")
@@ -100,9 +159,29 @@ def _node(raw, where: str, grid: int, band_color: str, band_dashed: bool, issues
     elif at[0] + at[1] > grid + 1:
         issues.append(Issue("schema", f"{where}.at", f"超出格線：起始欄加欄寬最多 {grid + 1}"))
         ok = False
-    text = _lines(raw.get("text"), MAX_LINES)
+    block = raw.get("block")
+    if block is not None:
+        color = raw.get("color", band_color)
+        if block not in ("down", "up"):
+            issues.append(Issue("schema", f"{where}.block", "只有：down, up"))
+            ok = False
+        if "text" in raw or "bullets" in raw:
+            issues.append(Issue("schema", f"{where}.block", "大型箭頭不放文字；說明寫在旁邊的節點"))
+            ok = False
+        if color not in PALETTE:
+            issues.append(Issue("schema", f"{where}.color", f"色票只有：{', '.join(PALETTE)}"))
+            ok = False
+        return {"id": raw["id"], "at": raw["at"], "block": block, "color": color, "text": []} if ok else None
+    bullets = _bullets(raw["bullets"], f"{where}.bullets", issues) if "bullets" in raw else []
+    ok = ok and bullets is not None
+    text = _lines(raw.get("text"), 1 if "bullets" in raw else MAX_LINES)
     if text is None:
-        issues.append(Issue("schema", f"{where}.text", f"必填：1–{MAX_LINES} 行字串，第一行是標題"))
+        rule = "條列面板的 text 只放一行標題" if "bullets" in raw else f"必填：1–{MAX_LINES} 行字串，第一行是標題"
+        issues.append(Issue("schema", f"{where}.text", rule))
+        ok = False
+    title_lines = raw.get("title_lines", 1)
+    if not (isinstance(title_lines, int) and 1 <= title_lines <= max(1, len(text or []))):
+        issues.append(Issue("schema", f"{where}.title_lines", "要是 1 到行數之間的整數"))
         ok = False
     accent = raw.get("accent", False)
     if accent is True:
@@ -121,7 +200,8 @@ def _node(raw, where: str, grid: int, band_color: str, band_dashed: bool, issues
     for key in ("dashed", "strong", "callout"):
         if key in raw and not isinstance(raw[key], bool):
             issues.append(Issue("schema", f"{where}.{key}", "要是 true 或 false"))
-    for key, allowed in (("fill", ("white", "tint")), ("align", ("center", "left"))):
+    align_choices = ("left", "right") if "bullets" in raw else ("center", "left")
+    for key, allowed in (("fill", ("white", "tint")), ("align", align_choices)):
         if key in raw and raw[key] not in allowed:
             issues.append(Issue("schema", f"{where}.{key}", f"只有：{', '.join(allowed)}"))
             ok = False
@@ -138,6 +218,9 @@ def _node(raw, where: str, grid: int, band_color: str, band_dashed: bool, issues
         "id": raw["id"],
         "at": at,
         "text": text,
+        "block": None,
+        "bullets": bullets or [],
+        "title_lines": title_lines,
         "color": color,
         "dashed": bool(raw.get("dashed", band_dashed)),
         "strong": bool(raw.get("strong", False)),
@@ -145,7 +228,7 @@ def _node(raw, where: str, grid: int, band_color: str, band_dashed: bool, issues
         "callout": bool(raw.get("callout", False)),
         "divider": divider,
         "fill": raw.get("fill", "tint" if raw.get("callout") else "white"),
-        "align": raw.get("align", "center"),
+        "align": raw.get("align", "left" if bullets else "center"),
         "accent_color": raw.get("accent_color", color),
     }
 
@@ -263,6 +346,11 @@ def validate(spec: dict) -> tuple[dict, list[Issue]]:
         issues.append(Issue("schema", "grid", "要是 6–96 的整數"))
         grid = GRID
 
+    labels = spec.get("labels", "side")
+    if labels not in ("side", "top"):
+        issues.append(Issue("schema", "labels", "只有：side（左側層名面板）, top（層名寫在層內上方）"))
+        labels = "side"
+
     bands, ids = [], set()
     raw_bands = spec.get("bands")
     if not isinstance(raw_bands, list) or not raw_bands:
@@ -279,8 +367,18 @@ def validate(spec: dict) -> tuple[dict, list[Issue]]:
             issues.append(Issue("schema", f"{where}.color", f"必填，色票只有：{', '.join(PALETTE)}"))
             color = "gray"
         name = _lines(band.get("name"), 2)
-        if name is None:
+        if name is None and (labels == "side" or "name" in band):
             issues.append(Issue("schema", f"{where}.name", "必填：層名（字串或 2 行清單）"))
+        if band.get("title_align", "left") not in ("left", "center"):
+            issues.append(Issue("schema", f"{where}.title_align", "只有：left, center"))
+        if "title_align" in band and labels != "top":
+            issues.append(Issue("schema", f"{where}.title_align", "只在 labels: top 時有效"))
+        band_id = band.get("id")
+        if band_id is not None:
+            if not _valid_id(band_id) or band_id in ids:
+                issues.append(Issue("schema", f"{where}.id", "要是全圖唯一、不含空白、「.」與「@」的字串"))
+            else:
+                ids.add(band_id)
         en = _lines(band["en"], 2) if "en" in band else []
         if en is None:
             issues.append(Issue("schema", f"{where}.en", "要是字串或 2 行清單"))
@@ -328,8 +426,10 @@ def validate(spec: dict) -> tuple[dict, list[Issue]]:
                 groups.append(group)
         bands.append(
             {
+                "id": band_id,
                 "color": color,
-                "name": name or [""],
+                "name": name or ([""] if labels == "side" else []),
+                "title_align": band.get("title_align", "left"),
                 "en": en or [],
                 "note": band.get("note", ""),
                 "dashed": band.get("dashed") is True,
@@ -340,6 +440,19 @@ def validate(spec: dict) -> tuple[dict, list[Issue]]:
                 "gap": band.get("gap", BAND_GAP),
             }
         )
+
+    rails = []
+    raw_rails = spec.get("rails", [])
+    if not isinstance(raw_rails, list):
+        issues.append(Issue("schema", "rails", "要是側欄清單"))
+        raw_rails = []
+    for i, raw_rail in enumerate(raw_rails, 1):
+        rail = _rail(raw_rail, f"rails[{i}]", len(bands), issues)
+        if rail:
+            if rail["id"] in ids:
+                issues.append(Issue("schema", f"rails[{i}].id", f"id 重複：{rail['id']}"))
+            ids.add(rail["id"])
+            rails.append(rail)
 
     raw_edges = spec.get("edges", [])
     if not isinstance(raw_edges, list):
@@ -352,6 +465,8 @@ def validate(spec: dict) -> tuple[dict, list[Issue]]:
         "footer": spec.get("footer", ""),
         "width": w,
         "grid": grid,
+        "labels": labels,
+        "rails": rails,
         "bands": bands,
         "edges": [e for e in edges if e],
     }
@@ -648,6 +763,10 @@ def draw_pill(c: Canvas, edge: dict, box: Box) -> None:
 
 
 def node_height(node: dict) -> int:
+    if node["block"]:
+        return 0  # 箭頭跟著同列其他節點的高度
+    if node["bullets"]:
+        return PANEL_HEAD_H + PANEL_ITEM_H * len(node["bullets"]) + PANEL_TAIL
     count = len(node["text"])
     extra = DIVIDER_H if node["divider"] else 0
     if node["callout"]:
@@ -667,7 +786,76 @@ def _line_ys(node: dict) -> list[float]:
     return [y + DIVIDER_H if node["divider"] and k >= node["divider"] else y for k, y in enumerate(ys)]
 
 
+def _text_at(c: Canvas, x: float, y: float, s: str, size: int, weight: int, color: str, where: str, room: float,
+             anchor: str) -> None:
+    """靠左或靠右對齊的一行字。"""
+    c.check(where, s, size, weight >= 600, room)
+    c.parts.append(
+        f'<text x="{x:.1f}" y="{y:.1f}" font-size="{size}" font-weight="{weight}" fill="{color}" '
+        f'text-anchor="{anchor}">{escape(s)}</text>'
+    )
+
+
+def draw_panel(c: Canvas, node: dict, box: Box) -> None:
+    """條列面板：膠囊標題加數個「● 重點／說明」條目，整體靠左或靠右。"""
+    _, label_fill, soft, ink, _ = PALETTE[node["color"]]
+    c.rect(box.x, box.y, box.w, box.h, 18, "#FFFFFF", soft, 3)
+    right = node["align"] == "right"
+    edge = box.x + box.w - 22 if right else box.x + 22
+    title, name = node["text"][0], node["id"]
+    pill_w = min(box.w - 36, width(title, PANEL_PILL_SIZE, True) + 52)
+    c.check(name, title, PANEL_PILL_SIZE, True, box.w - 36 - 30)
+    px = box.x + box.w - 18 - pill_w if right else box.x + 18
+    c.rect(px, box.y + 18, pill_w, 44, 22, label_fill, ink, 2)
+    c.text(px + pill_w / 2, box.y + 47, title, PANEL_PILL_SIZE, ink, 800)
+    pitch = min(PANEL_ITEM_MAX, (box.h - PANEL_HEAD_H - PANEL_TAIL) / len(node["bullets"]))
+    anchor, room = "end" if right else "start", box.w - 44
+    for k, (head, detail, tone) in enumerate(node["bullets"]):
+        top = box.y + PANEL_HEAD_H + k * pitch
+        _text_at(c, edge, top + 28, f"● {head}", PANEL_HEAD_SIZE, 800, INK, name, room, anchor)
+        if detail:
+            color = PALETTE[tone][3] if tone else MUTE
+            _text_at(c, edge, top + 57, detail, PANEL_DETAIL_SIZE, 700 if tone else 600, color, name, room, anchor)
+
+
+def draw_block(c: Canvas, node: dict, box: Box) -> None:
+    """大型方向箭頭：表達一整段資料流的方向。"""
+    label_fill, ink = PALETTE[node["color"]][1], PALETTE[node["color"]][3]
+    cx, top, bottom = box.cx, box.y, box.y + box.h
+    s, h, d = BLOCK_SHAFT / 2, BLOCK_HEAD_W / 2, BLOCK_HEAD_H
+    if node["block"] == "down":
+        points = [(cx - s, top), (cx + s, top), (cx + s, bottom - d), (cx + h, bottom - d), (cx, bottom),
+                  (cx - h, bottom - d), (cx - s, bottom - d)]
+    else:
+        points = [(cx, top), (cx + h, top + d), (cx + s, top + d), (cx + s, bottom), (cx - s, bottom),
+                  (cx - s, top + d), (cx - h, top + d)]
+    path = " L".join(f"{x:.1f},{y:.1f}" for x, y in points)
+    c.parts.append(f'<path d="M{path} Z" fill="{label_fill}" stroke="{ink}" stroke-width="3" stroke-linejoin="round"/>')
+
+
+def draw_rail(c: Canvas, rail: dict, box: Box) -> None:
+    """跨多層的側欄：淡色直欄，中央一張白卡寫它是誰。"""
+    fill, _, soft, _, line = PALETTE[rail["color"]]
+    c.rect(box.x, box.y, box.w, box.h, 18, fill, line, 2.5)
+    sizes = [(TITLE_STYLE, 36) if k < rail["title_lines"] else (DETAIL_STYLE, 30) for k in range(len(rail["text"]))]
+    card_h = sum(step for _, step in sizes) + 44
+    cx, cy, cw = box.x + 20, box.cy - card_h / 2, box.w - 40
+    c.rect(cx, cy, cw, card_h, 14, "#FFFFFF", soft, 2)
+    y = cy + 22
+    for k, (s, ((size, weight), step)) in enumerate(zip(rail["text"], sizes, strict=True)):
+        if k == rail["title_lines"]:
+            y += 6
+        c.text(box.cx, y + step * 0.72, s, size, INK if k < rail["title_lines"] else MUTE, weight, rail["id"], cw - 14)
+        y += step
+
+
 def draw_node(c: Canvas, node: dict, box: Box) -> None:
+    if node["block"]:
+        draw_block(c, node, box)
+        return
+    if node["bullets"]:
+        draw_panel(c, node, box)
+        return
     fill, _, soft, ink, line = PALETTE[node["color"]]
     strong_ink = PALETTE[node["accent_color"]][3]
     dash = "8 6" if node["dashed"] else None
@@ -691,7 +879,7 @@ def draw_node(c: Canvas, node: dict, box: Box) -> None:
         accented = k + 1 in node["accent"]
         if node["callout"]:
             (size, weight), color = (DETAIL_STYLE[0], 700), strong_ink if accented else INK
-        elif k == 0:
+        elif k < node["title_lines"]:
             (size, weight), color = TITLE_STYLE, strong_ink if accented else INK
         elif accented:
             (size, weight), color = ACCENT_STYLE, strong_ink
@@ -731,12 +919,40 @@ def _label_lines(band: dict) -> list[tuple[str, int, str, int, int]]:
     return lines
 
 
+def header_lines(band: dict) -> list[tuple[str, int, int, float]]:
+    """層內標題版型的各行：文字、字級、字重、相對層頂的基線。"""
+    lines = [(s, NAME_SIZE - 2, 800, 40 + 34 * k) for k, s in enumerate(band["name"])]
+    start = 40 + 34 * len(band["name"]) + 2
+    return lines + [(s, EN_SIZE - 1, 700, start + 28 * k) for k, s in enumerate(band["en"])]
+
+
+def header_box(band: dict, x0: float, x1: float, y: float) -> Box:
+    lines = header_lines(band)
+    w = max(width(s, size, True) for s, size, _, _ in lines)
+    left = (x0 + x1 - w) / 2 if band["title_align"] == "center" else x0 + OPEN_INSET + 4
+    return Box(left, y + 12, w, lines[-1][3] - 4)
+
+
+def draw_open_band(c: Canvas, band: dict, x0: float, x1: float, y: float, height: float) -> None:
+    """層內標題版型的層框：沒有左側面板，有層名的層用較深的框線。"""
+    fill, _, soft, ink, line = PALETTE[band["color"]]
+    c.rect(x0, y, x1 - x0, height, 18, fill, line if band["name"] else soft, 2.5 if band["name"] else 2,
+           "10 7" if band["dashed"] else None)
+    center = band["title_align"] == "center"
+    x = (x0 + x1) / 2 if center else x0 + OPEN_INSET + 4
+    for s, size, weight, ly in header_lines(band):
+        _text_at(c, x, y + ly, s, size, weight, ink, "header", x1 - x0 - 2 * OPEN_INSET, "middle" if center else "start")
+
+
 def render(m: dict) -> tuple[str, list[Issue], tuple[int, int]]:
     c = Canvas()
     w = m["width"]
-    x0, x1 = MARGIN, w - MARGIN
-    cx0 = x0 + LABEL_W + LABEL_GAP
-    unit = (x1 - LABEL_GAP - cx0) / m["grid"]
+    sides = {rail["side"] for rail in m["rails"]}
+    x0 = MARGIN + (RAIL_W + RAIL_GAP if "left" in sides else 0)
+    x1 = w - MARGIN - (RAIL_W + RAIL_GAP if "right" in sides else 0)
+    open_style = m["labels"] == "top"
+    cx0 = x0 + (OPEN_INSET if open_style else LABEL_W + LABEL_GAP)
+    unit = (x1 - (OPEN_INSET if open_style else LABEL_GAP) - cx0) / m["grid"]
     draw_title(c, w, m)
 
     boxes: dict[str, Box] = {}
@@ -749,13 +965,19 @@ def render(m: dict) -> tuple[str, list[Issue], tuple[int, int]]:
         heights = [max(node_height(n) for n in row) if row else 0 for row in band["rows"]]
         content = sum(heights) + band["row_gap"] * max(0, len(heights) - 1)
         top, bottom = band["pad"]
-        height = max(BAND_MIN_H, content + top + bottom, sum(line[4] for line in _label_lines(band)) + 24)
+        if open_style:
+            label_height = header_lines(band)[-1][3] + 24 if band["name"] else 0
+        else:
+            label_height = sum(line[4] for line in _label_lines(band)) + 24
+        height = max(0 if open_style else BAND_MIN_H, content + top + bottom, label_height)
+        if open_style and band["name"]:
+            boxes[f"header:{i}"] = header_box(band, x0, x1, y)
         ry = y + top + (height - content - top - bottom) / 2
         for row, row_h in zip(band["rows"], heights, strict=True):
             for node in row:
                 col, span = node["at"]
                 # 旁註照自己的行數取高，不跟著同列的方塊拉高
-                height_here = node_height(node) if node["callout"] else row_h
+                height_here = node_height(node) if not node["block"] and node["callout"] else row_h
                 boxes[node["id"]] = Box(cx0 + (col - 1) * unit, ry + (row_h - height_here) / 2, span * unit, height_here)
                 nodes[node["id"]] = node
             ry += row_h + band["row_gap"]
@@ -767,7 +989,17 @@ def render(m: dict) -> tuple[str, list[Issue], tuple[int, int]]:
         y += height + (band["gap"] if i < len(m["bands"]) else 0)
     bottom_edge = y
 
+    # 層框不是障礙物，只當連線的接點
+    frame_ports = {band["id"]: Box(x0, top, x1 - x0, height) for top, height, band, _ in frames if band["id"]}
+    for rail in m["rails"]:
+        first, last = frames[rail["bands"][0] - 1], frames[rail["bands"][1] - 1]
+        rx = MARGIN if rail["side"] == "left" else w - MARGIN - RAIL_W
+        boxes[rail["id"]] = Box(rx, first[0], RAIL_W, last[0] + last[1] - first[0])
+
     for top, height, band, i in frames:
+        if open_style:
+            draw_open_band(c, band, x0, x1, top, height)
+            continue
         draw_band_frame(c, x0, x1, top, height, band["color"], band["dashed"])
         lines = _label_lines(band)
         ly = top + (height - sum(line[4] for line in lines)) / 2
@@ -775,14 +1007,16 @@ def render(m: dict) -> tuple[str, list[Issue], tuple[int, int]]:
             c.text(x0 + LABEL_W / 2, ly + line_h * 0.72, s, size, color, weight, f"bands[{i}].label", LABEL_W - 16)
             ly += line_h
 
-    paths = [route(e, boxes) for e in m["edges"]]
+    paths = [route(e, {**boxes, **frame_ports}) for e in m["edges"]]
     pills = [pill_box(e, p) if e["label"] else None for e, p in zip(m["edges"], paths, strict=True)]
     h = draw_footer(c, w, bottom_edge, m["footer"])
     area = Box(0, HEAD_Y, w, bottom_edge + 14 - HEAD_Y)
-    c.issues.extend(lint(m, boxes, members, paths, pills, x0 + LABEL_W, area))
+    c.issues.extend(lint(m, boxes, members, paths, pills, -1e9 if open_style else x0 + LABEL_W, area))
 
     for group, box in groups:
         draw_group(c, group, box)
+    for rail in m["rails"]:
+        draw_rail(c, rail, boxes[rail["id"]])
     # 虛線先畫：虛線匯進實線主幹時，共用段看到的是實線
     drawn = zip(m["edges"], paths, crossings(m["edges"], paths), strict=True)
     for edge, points, hops in sorted(drawn, key=lambda item: not item[0]["dashed"]):
