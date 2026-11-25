@@ -17,6 +17,7 @@ from pptx.enum.text import PP_ALIGN
 from pptx.util import Inches
 
 from deckstyle import design, engine
+from deckstyle.measure import text_em
 from deckstyle.spec import SpecError
 from deckstyle.theme import Theme
 
@@ -407,6 +408,116 @@ def test_badge_pushes_tight_text_below_itself(build_spec: Build) -> None:
     out = build_spec(one_slide([("arch_graph", _graph(node))]))
     tf = _card_of(out, node).text_frame
     assert tf.margin_top > tf.margin_bottom
+
+
+def _blocked_pair(rows: int, upward: bool = False, horizontal: bool = False) -> dict[str, Any]:
+    """上下（或左右）相鄰的兩個節點與一條阻斷邊；三列以上的列距最窄。"""
+    second = {"col": 1, "row": 0} if horizontal else {"col": 0, "row": 1}
+    nodes = [{"id": "a", "col": 0, "row": 0, "title": "事件檢核"}, {"id": "b", **second, "title": "阻斷"}]
+    ends = ("b", "a") if upward else ("a", "b")
+    edge = {"from": ends[0], "to": ends[1], "kind": "blocked", "label": "違規"}
+    return {"nodes": nodes, "edges": [edge], "cols": 2 if horizontal else 1, "rows": rows, "h": 4.35}
+
+
+def _arrow_and_mark(out: Path) -> tuple[Any, Any]:
+    shapes = list(Presentation(str(out)).slides[1].shapes)
+    arrow = next(sh for sh in shapes if sh.shape_type == MSO_SHAPE_TYPE.LINE and "tailEnd" in sh._element.xml)
+    mark = next(sh for sh in shapes if sh.has_text_frame and sh.text_frame.text == "✕")
+    return arrow, mark
+
+
+@pytest.mark.parametrize("rows", [2, 3, 4])
+@pytest.mark.parametrize("upward", [False, True])
+def test_vertical_blocked_edge_has_room_for_mark_and_arrowhead(build_spec: Build, rows: int, upward: bool) -> None:
+    """直向阻斷邊：列距留得出位置，「✕」維持原尺寸、在連線正中，兩側的連線與箭頭都露出來。"""
+    arrow, mark = _arrow_and_mark(build_spec(one_slide([("arch_graph", _blocked_pair(rows, upward))])))
+    top, bottom = sorted((arrow.begin_y, arrow.end_y))
+    assert abs(mark.height - Inches(0.22)) <= Inches(0.001)
+    assert abs(mark.top + mark.height / 2 - (top + bottom) / 2) <= Inches(0.005)
+    assert mark.top - top >= Inches(0.099)
+    assert bottom - (mark.top + mark.height) >= Inches(0.099)
+
+
+@pytest.mark.parametrize(("kind", "gap"), [("forward", 0.34), ("blocked", 0.48)])
+def test_row_gap_grows_only_for_a_vertical_blocked_edge(build_spec: Build, kind: str, gap: float) -> None:
+    """對照組：沒有直向阻斷邊的圖，列距不變。"""
+    graph = _blocked_pair(3)
+    graph["edges"][0]["kind"] = kind
+    shapes = list(Presentation(str(build_spec(one_slide([("arch_graph", graph)])))).slides[1].shapes)
+    upper, lower = (
+        next(sh for sh in shapes if sh.has_text_frame and sh.text_frame.text.startswith(title))
+        for title in ("事件檢核", "阻斷")
+    )
+    assert abs(lower.top - (upper.top + upper.height) - Inches(gap)) <= Inches(0.002)
+
+
+def test_blocked_mark_stays_at_the_middle_of_a_long_edge(build_spec: Build) -> None:
+    """對照組：夠長的橫向阻斷邊，「✕」仍在正中、維持原尺寸。"""
+    arrow, mark = _arrow_and_mark(build_spec(one_slide([("arch_graph", _blocked_pair(1, horizontal=True))])))
+    middle = (arrow.begin_x + arrow.end_x) / 2
+    assert abs(mark.left + mark.width / 2 - middle) <= Inches(0.005)
+    assert abs(mark.width - Inches(0.22)) <= Inches(0.001)
+
+
+def _arrow_ends(out: Path) -> list[tuple[bool, bool]]:
+    """每段連線的（起點有箭頭, 終點有箭頭）。"""
+    lines = [sh for sh in Presentation(str(out)).slides[1].shapes if sh.shape_type == MSO_SHAPE_TYPE.LINE]
+    return [("headEnd" in sh._element.xml, "tailEnd" in sh._element.xml) for sh in lines]
+
+
+@pytest.mark.parametrize(("arrow", "ends"), [(None, (False, True)), ("forward", (False, True)), ("both", (True, True))])
+def test_straight_edge_draws_the_requested_arrowheads(build_spec: Build, arrow: str | None, ends) -> None:
+    """同一對節點的來回（寫入與讀回）畫成一條雙向箭頭；沒寫 `arrow` 時只有終點箭頭。"""
+    graph = _blocked_pair(1, horizontal=True)
+    graph["edges"] = [{"from": "a", "to": "b", **({} if arrow is None else {"arrow": arrow})}]
+    assert _arrow_ends(build_spec(one_slide([("arch_graph", graph)]))) == [ends]
+
+
+def test_bent_edge_puts_one_arrowhead_at_each_end(build_spec: Build) -> None:
+    """折線的雙向箭頭落在兩端：起點段只有起點箭頭，終點段只有終點箭頭，轉角不畫。"""
+    graph = _blocked_pair(2)
+    graph["cols"] = 2
+    graph["nodes"][1]["col"] = 1
+    graph["edges"] = [{"from": "a", "to": "b", "arrow": "both"}]
+    assert sorted(_arrow_ends(build_spec(one_slide([("arch_graph", graph)])))) == [(False, True), (True, False)]
+
+
+@pytest.mark.parametrize("label", ["事件", "事件・稽核", "POST JSON", "查詢結果與稽核紀錄"])
+def test_column_gap_fits_the_label_of_a_horizontal_edge(build_spec: Build, theme: Theme, label: str) -> None:
+    """橫向邊的標籤放在兩節點之間：欄距依標籤寬度推算，標籤不壓到方框；短標籤維持原本的欄距。"""
+    graph = _blocked_pair(1, horizontal=True)
+    graph["edges"] = [{"from": "a", "to": "b", "label": label}]
+    shapes = list(Presentation(str(build_spec(one_slide([("arch_graph", graph)])))).slides[1].shapes)
+    left, right = (
+        next(sh for sh in shapes if sh.has_text_frame and sh.text_frame.text.startswith(title))
+        for title in ("事件檢核", "阻斷")
+    )
+    gap = right.left - (left.left + left.width)
+    width = Inches(text_em(label) * theme.type.label / 72)
+    assert gap >= width
+    if label == "事件":
+        assert abs(gap - Inches(0.68)) <= Inches(0.002)
+
+
+def test_edge_label_over_a_node_stops_the_build(build_spec: Build) -> None:
+    """折線的標籤放不進線段、會壓到節點時停在建置時，不讓字被方框擋住。"""
+    graph = _blocked_pair(2)
+    graph["cols"] = 2
+    graph["nodes"][1]["col"] = 1
+    graph["edges"] = [{"from": "a", "to": "b", "label": "這是一段長到放不進折線橫段而一定會壓到起點方框的邊標籤文字"}]
+    with pytest.raises(SpecError, match=r"標籤.*壓到節點「事件檢核」"):
+        build_spec(one_slide([("arch_graph", graph)]))
+
+
+def test_edge_running_through_a_node_stops_the_build(build_spec: Build) -> None:
+    """跨過中間節點的連線會蓋住它的字，停在建置時。"""
+    nodes = [
+        {"id": k, "col": i, "row": 0, "title": name}
+        for i, (k, name) in enumerate([("a", "甲"), ("b", "乙"), ("c", "丙")])
+    ]
+    graph = {"nodes": nodes, "edges": [{"from": "a", "to": "c"}], "cols": 3, "rows": 1, "h": 4.35}
+    with pytest.raises(SpecError, match=r"連線穿過節點「乙」"):
+        build_spec(one_slide([("arch_graph", graph)]))
 
 
 def test_numbered_flow_step_reports_text_under_its_badge(build_spec: Build) -> None:
