@@ -1,9 +1,8 @@
 ---
 name: maintain-agent-context
 description: >-
-  維護 repo 內與廠商無關的 agent 指示檔。用於編輯或新增 AGENTS.md、CLAUDE.md、CLAUDE.local.md（個人偏好覆寫）、
-  .cursorrules、.cursor/rules，把指令寫進 CLAUDE.md，或修正 .agents/skills 下已安裝的技能（含錯字；
-  skills-lock.json 所列的技能不可手改，要改來源）時。
+  決定 agent 指示寫進哪個檔並維護這些檔：預設只用與廠商無關的 AGENTS.md、不建 CLAUDE.md 或 CLAUDE.local.md，個人偏好放 ~/.claude/CLAUDE.md，已安裝的技能改來源、不改副本。
+  用於要把建置、測試指令或規範寫進 CLAUDE.md、AGENTS.md、.cursorrules 或 .cursor/rules，新增、搬移或整理這些指示檔，或修正 .agents/skills 下已安裝的技能（含錯字；skills-lock.json 所列的技能要改來源）時。
 license: MIT
 ---
 
