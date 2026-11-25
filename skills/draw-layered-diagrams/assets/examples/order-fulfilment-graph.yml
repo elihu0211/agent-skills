@@ -1,0 +1,45 @@
+# 範例：節點圖模式（每層用 rows 擺節點、用 edges 連線）。涵蓋直線與折線、雙向粗線、虛線回饋、
+# 同一點分岔、ㄩ字回路與跳線弧、群組外框、旁註。
+title: 訂單履約流程
+subtitle: （接單、履約、結算三層 — 指令由上往下，結果往回修正計畫）
+footer: 回饋線讓計畫跟著現場修正，而不是各層各做各的
+width: 2200
+bands:
+  - color: blue
+    name: 接單與計畫
+    en: （Planning）
+    pad: [62, 24]
+    gap: 90
+    rows:
+      - - {id: order, at: [2, 10], text: [訂單, 客戶需求與交期]}
+        - {id: plan, at: [18, 12], strong: true, text: [出貨計畫, 依庫存與產能排定]}
+        - {id: check, at: [37, 11], text: [產能檢查, 排不下就回頭調整]}
+  - color: green
+    name: 履約
+    en: （Fulfilment）
+    pad: [64, 90]
+    gap: 90
+    rows:
+      - - {id: pick, at: [3, 8], text: [揀貨, 依波次與儲位]}
+        - {id: pack, at: [14, 8], text: [包裝, 秤重與貼標]}
+        - {id: ship, at: [28, 9], strong: true, accent: true, text: [出貨, 交給物流商, 出貨即扣庫存]}
+        - {id: note, at: [40, 8], callout: true, color: rose, accent: 2, text: [異常件另走人工流程, 不阻塞同一波次]}
+    groups:
+      - {id: floor, title: 倉庫現場, wraps: [pick, pack]}
+  - color: gray
+    name: 結算
+    en: （Finance）
+    rows:
+      - - {id: invoice, at: [2, 12], text: [開立發票, 依實際出貨量]}
+        - {id: stock, at: [28, 9], text: [庫存帳, 即時扣帳]}
+edges:
+  - {from: order, to: plan}
+  - {from: plan, to: check}
+  - {from: check.top, to: plan.top, style: dashed, color: blue, depth: 28, label: 產能不足回頭調整}
+  - {from: plan.bottom, to: floor.top, channel: 0.55, label: 波次與揀貨單}
+  - {from: plan.bottom, to: ship.top}
+  - {from: pick, to: pack}
+  - {from: floor, to: ship, weight: thick, color: green, label: 裝箱}
+  - {from: ship.bottom@0.8, to: floor.bottom@0.3, color: green, depth: 40, label: 缺件退回補揀, label_at: 0.74}
+  - {from: ship.bottom@0.5, to: stock.top, weight: thick, arrow: both}
+  - {from: ship.bottom@0.2, to: invoice.top@0.8, channel: 0.8, label: 出貨確認, label_at: 0.7}

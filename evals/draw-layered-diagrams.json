@@ -44,6 +44,20 @@
       }
     },
     {
+      "id": "cross-layer-connections",
+      "query": "docs/mes.md 這張架構分四層，設備的遙測要跨過中間層直接進事件匯流排，AI 代理也直接查知識圖譜。這兩條要畫成線，不要只用文字說明，輸出 PNG。",
+      "expected_behavior": [
+        "改用節點圖模式：每層寫 rows，跨層關係寫在 edges，不以說明框或方塊文字代替那兩條線",
+        "被 layout 規則擋下時調接點、channel、depth 或間距，直到 --check 通過",
+        "打開 PNG 逐一核對每條關係的起點、終點與箭頭方向"
+      ],
+      "setup": {
+        "files": {
+          "docs/mes.md": "# MES 架構\n\n語意層：知識圖譜。\n匯流層：事件匯流排。\n代理層：排程代理。\n現場層：設備。\n\n設備遙測直接送事件匯流排；排程代理直接查知識圖譜；事件匯流排通知排程代理。\n"
+        }
+      }
+    },
+    {
       "id": "fix-overflow-report",
       "query": "docs/stack.yml 跑 draw.py 回報 overflow，有兩個方塊的字放不下，幫我修好重新出圖。",
       "expected_behavior": [

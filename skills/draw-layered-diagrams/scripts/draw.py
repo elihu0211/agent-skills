@@ -5,8 +5,9 @@
 # ///
 """把宣告式 YAML 規格畫成「淡色層帶＋白色圓角方塊」風格的分層圖，直接輸出兩倍解析度 PNG。
 
-規格寫法見 ../references/spec.md。先在記憶體組 SVG，再以 headless Chrome 截圖成 PNG；
-規格有誤或任何文字估寬超出它的方塊，就逐條列出並停下，不輸出溢字的圖。
+規格寫法見 ../references/spec.md。兩種模式：層帶模式（本檔，每層一列等寬方塊、層間說明框）與節點圖模式
+（graph.py，規格含 rows 或 edges：節點照格線擺放、節點之間有連線）。先在記憶體組 SVG，再以 headless Chrome
+截圖成 PNG；規格有誤、文字溢出或版面不乾淨，就逐條列出並停下，不輸出有問題的圖。
 
 用法：
   uv run draw.py SPEC.yml                  輸出與 SPEC 同名的 .png
@@ -14,7 +15,7 @@
   uv run draw.py SPEC.yml --check [--json] 只驗規格與文字寬度，不需要 Chrome
   uv run draw.py SPEC.yml --svg OUT.svg    另存中間 SVG（除錯用）
 
-結束碼：0 成功｜1 規格有誤或文字溢出｜2 執行環境問題（讀不到檔、找不到 Chrome、截圖失敗）。
+結束碼：0 成功｜1 規格有誤、文字溢出或版面不乾淨｜2 執行環境問題（讀不到檔、找不到 Chrome、截圖失敗）。
 """
 
 from __future__ import annotations
@@ -31,63 +32,43 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from xml.sax.saxutils import escape
 
+import graph
 import yaml
+from base import (
+    HEAD_Y,
+    INK,
+    LABEL_GAP,
+    LABEL_W,
+    LINE_STYLE,
+    MARGIN,
+    MUTE,
+    PALETTE,
+    Canvas,
+    Issue,
+    draw_band_frame,
+    draw_footer,
+    draw_title,
+    width,
+    wrap_svg,
+)
+from base import (
+    is_text as _str,
+)
 
-FONT = "'PingFang TC','Noto Sans TC','Microsoft JhengHei','Heiti TC',sans-serif"
-INK, MUTE, SUBTLE = "#1B2433", "#5B6577", "#4A5568"
-
-# 色票：層帶底色、標籤面板底色、層帶框線、層名字色、方塊框線
-PALETTE = {
-    "rose": ("#FDF3F5", "#F7E3E8", "#EBA3B1", "#C2334A", "#E58A9C"),
-    "blue": ("#EFF5FE", "#E1ECFC", "#AECBF2", "#1D5FC4", "#8DB4EE"),
-    "purple": ("#F6F1FD", "#ECE2FB", "#CDB2F0", "#7438BF", "#B58BE6"),
-    "teal": ("#ECF8F8", "#DBF1F2", "#A0D8DB", "#0F7780", "#7CC7CC"),
-    "yellow": ("#FFF9E7", "#FDF0C7", "#F1D48A", "#946300", "#E8C25E"),
-    "orange": ("#FFF5EC", "#FDE7D3", "#F4C29A", "#B9520B", "#EFA673"),
-    "green": ("#EBF8F1", "#D7F2E3", "#9EDBBA", "#11804A", "#79CC9E"),
-    "gray": ("#F2F4F7", "#E4E8EE", "#CBD2DC", "#3D4A5C", "#AEB8C6"),
-}
 ARROWS = ("none", "down", "up", "both")
 
-MARGIN, LABEL_W, LABEL_GAP, COL_GAP = 30, 300, 20, 34
+COL_GAP = 34
 ROW_H, ROW_GAP, BOX_H, BOX_GAP = 132, 16, 104, 14
 BRIDGE_GAP = 40  # 層間說明框另外占用的高度
 ARROW_ROOM = 24  # 說明框帶箭頭時再加的高度
-HEAD_Y, HEAD_H = 165, 70
+HEAD_H = 70
 # 方塊內各行（標題、重點、補充）的基線與字級；行數少時整組垂直置中
 LINE_Y = {1: (60,), 2: (45, 77), 3: (35, 65, 91)}
-LINE_STYLE = ((22, 800), (18, 700), (16, 500))
 # 左側層名面板各行（層名、英文、附註）相對層帶頂端的基線
 LABEL_Y = {1: (75,), 2: (58, 92), 3: (46, 80, 112)}
 
 
-@dataclass
-class Issue:
-    rule: str  # schema｜overflow
-    where: str
-    message: str
-
-
-def width(text: str, size: float, bold: bool = False) -> float:
-    """估字串顯示寬：中日文與全形符號一字寬，英數依大小寫與粗細折算（偏保守，寧可多報溢出）。"""
-    total = 0.0
-    for ch in text:
-        if ord(ch) >= 0x2E80:
-            total += size
-        elif ch.isupper():
-            total += size * (0.70 if bold else 0.66)
-        elif ch in " il.,:;|!'":
-            total += size * 0.30
-        else:
-            total += size * (0.60 if bold else 0.56)
-    return total
-
-
 # ---------- 規格 ----------
-
-
-def _str(v) -> bool:
-    return isinstance(v, str) and v.strip() != ""
 
 
 def _boxes(raw, where: str, issues: list[Issue]) -> list[list[str]]:
@@ -209,34 +190,6 @@ def validate(spec) -> tuple[dict, list[Issue]]:
 # ---------- 繪圖 ----------
 
 
-class Canvas:
-    """累積 SVG 片段，順手記下估寬超出可用空間的字串。"""
-
-    def __init__(self) -> None:
-        self.parts: list[str] = []
-        self.issues: list[Issue] = []
-
-    def check(self, where: str, s: str, size: float, bold: bool, room: float) -> None:
-        need = width(s, size, bold)
-        if need > room:
-            self.issues.append(Issue("overflow", where, f"「{s}」估 {need:.0f}px，可用 {room:.0f}px：縮短字句"))
-
-    def text(self, x, y, s, size, fill, weight=400, where=None, room=None, extra=""):
-        if room is not None:
-            self.check(where or s, s, size, weight >= 600, room)
-        self.parts.append(
-            f'<text x="{x:.1f}" y="{y:.1f}" font-size="{size}" font-weight="{weight}" fill="{fill}" '
-            f'text-anchor="middle"{extra}>{escape(s)}</text>'
-        )
-
-    def rect(self, x, y, w, h, r, fill, stroke, sw=2.0, dash=None):
-        d = f' stroke-dasharray="{dash}"' if dash else ""
-        self.parts.append(
-            f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" rx="{r}" '
-            f'fill="{fill}" stroke="{stroke}" stroke-width="{sw}"{d}/>'
-        )
-
-
 @dataclass
 class Grid:
     w: int
@@ -257,9 +210,7 @@ class Grid:
 
 
 def draw_header(c: Canvas, g: Grid, m: dict) -> float:
-    c.text(g.w / 2, 78, m["title"], 50, INK, 800, "title", g.w - 60, ' letter-spacing="3"')
-    if m["subtitle"]:
-        c.text(g.w / 2, 128, m["subtitle"], 23, SUBTLE, 600, "subtitle", g.w - 60, ' letter-spacing="1"')
+    draw_title(c, g.w, m)
     if not m["columns"]:
         return HEAD_Y
     y = HEAD_Y
@@ -284,20 +235,10 @@ def draw_header(c: Canvas, g: Grid, m: dict) -> float:
 
 
 def draw_band(c: Canvas, g: Grid, y: float, band: dict, idx: int) -> None:
-    fill, label_fill, border, ink, box_line = PALETTE[band["color"]]
+    ink, box_line = PALETTE[band["color"]][3:]
     dash = "10 7" if band["dashed"] else None
-    x0, x1 = g.x0, g.x1
-    c.rect(x0, y, x1 - x0, ROW_H, 18, fill, border, 2, dash)
-    c.parts.append(
-        f'<path d="M{x0 + 18},{y} H{x0 + LABEL_W} V{y + ROW_H} H{x0 + 18} '
-        f'a18,18 0 0 1 -18,-18 V{y + 18} a18,18 0 0 1 18,-18 Z" fill="{label_fill}"/>'
-    )
-    line_dash = ' stroke-dasharray="10 7"' if dash else ""
-    c.parts.append(
-        f'<line x1="{x0 + LABEL_W}" y1="{y + 2}" x2="{x0 + LABEL_W}" y2="{y + ROW_H - 2}" '
-        f'stroke="{border}" stroke-width="2"{line_dash}/>'
-    )
-    c.rect(x0, y, x1 - x0, ROW_H, 18, "none", border, 2, dash)
+    x0 = g.x0
+    draw_band_frame(c, x0, g.x1, y, ROW_H, band["color"], band["dashed"])
     lx, where = x0 + LABEL_W / 2, f"bands[{idx}]"
     label = [(band["name"], 29, ink, 800), (band["en"], 20, ink, 700), (band["note"], 17, MUTE, 600)]
     label = [t for t in label if t[0]]
@@ -355,18 +296,8 @@ def render(m: dict) -> tuple[str, list[Issue], tuple[int, int]]:
             draw_bridge(c, g, y - ROW_GAP, band)
             y += bridge_gap(band)
     bottom = y - ROW_GAP
-    if m["footer"]:
-        footer = m["footer"] if m["footer"].startswith("★") else f"★ {m['footer']}"
-        c.text(g.w / 2, bottom + 62, footer, 27, INK, 800, "footer", g.w - 60, ' letter-spacing="1"')
-        h = int(bottom + 100)
-    else:
-        h = int(bottom + 40)
-    svg = (
-        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {g.w} {h}" width="{g.w}" height="{h}" '
-        f'font-family="{FONT}"><title>{escape(m["title"])}</title>'
-        f'<rect width="{g.w}" height="{h}" fill="#FFFFFF"/>' + "".join(c.parts) + "</svg>"
-    )
-    return svg, c.issues, (g.w, h)
+    h = draw_footer(c, g.w, bottom, m["footer"])
+    return wrap_svg(c, g.w, h, m["title"]), c.issues, (g.w, h)
 
 
 # ---------- 輸出 ----------
@@ -412,7 +343,7 @@ def to_png(svg: str, size: tuple[int, int], scale: int, out: Path) -> None:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description="把 YAML 規格畫成淡色層帶風格的分層圖，直接輸出兩倍解析度 PNG。",
-        epilog="結束碼：0 成功｜1 規格有誤或文字溢出｜2 執行環境問題。",
+        epilog="結束碼：0 成功｜1 規格有誤、文字溢出或版面不乾淨｜2 執行環境問題。",
     )
     ap.add_argument("spec", type=Path, help="YAML 規格檔（寫法見 references/spec.md）")
     ap.add_argument("-o", "--output", type=Path, help="輸出 PNG（預設與規格同名、副檔名 .png）")
@@ -439,11 +370,12 @@ def main(argv: list[str] | None = None) -> int:
         report(False, [Issue("schema", str(args.spec), f"YAML 語法錯誤：{e}")])
         return 1
 
-    model, issues = validate(spec)
+    mode = graph if graph.is_graph(spec) else None
+    model, issues = (mode.validate if mode else validate)(spec)
     if issues:
         report(False, issues)
         return 1
-    svg, issues, size = render(model)
+    svg, issues, size = (mode.render if mode else render)(model)
     if issues:
         report(False, issues, list(size))
         return 1
