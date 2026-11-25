@@ -81,6 +81,13 @@ def node(i, col, span=6, **extra):
 
 row = [node("a", 1), node("b", 16), node("c", 31)]
 two_rows = [[node("a", 1)], [node("b", 31)]]
+def two_bands(**edge):
+    bands = [{"color": c, "name": n, "rows": [[node(i, 1)]]} for c, n, i in (("blue", "一層", "a"), ("teal", "二層", "b"))]
+    return {"title": "守門測試", "bands": bands, "edges": [{"from": "a", "to": "b", "label": "跨層", **edge}]}
+def near_tip(dx):
+    """兩個相鄰節點之間的雙字標籤，中心放在箭尖左方 -dx 像素。"""
+    return spec([[node("a", 1), node("b", 10)]],
+                [{"from": "a", "to": "b", "label": "到達", "label_at": 1, "shift": [dx, 0]}])
 cases = {
     # 版面
     "through-node": (spec([row], [{"from": "a", "to": "c"}]), "layout", "穿過或貼到節點 b"),
@@ -93,6 +100,8 @@ cases = {
                       "layout", "疊在一起"),
     "leaves-bands": (spec([row], [{"from": "a.top", "to": "c.top", "depth": 120}]), "layout", "跑出層帶區域"),
     "into-panel": (spec([row], [{"from": "a.left", "to": "c.left", "depth": 60}]), "layout", "左側層名面板"),
+    "label-on-frame": (two_bands(shift=[0, 22]), "layout", "層框邊線"),
+    "label-on-arrowhead": (near_tip(-40), "layout", "蓋住自己的箭頭"),
     # 規格
     "unknown-node": (spec([row], [{"from": "a", "to": "zz"}]), "schema", "沒有這個節點"),
     "bad-side": (spec([row], [{"from": "a.middle", "to": "b"}]), "schema", "邊只有"),
@@ -114,6 +123,9 @@ cases = {
     "header-on-node": ({**spec([row]), "labels": "top"}, "layout", "重疊"),
     "bridge-in-graph": (spec([row], bridge="節點圖模式沒有層間說明框"), "schema", "不認得的鍵"),
 }
+# 對照組：同樣的圖把標籤放開就要通過，守門才不是一律擋下
+for name, body in {"pass-between-bands": two_bands(), "pass-clear-of-arrowhead": near_tip(-60)}.items():
+    (tmp / f"{name}.yml").write_text(json.dumps(body, ensure_ascii=False), encoding="utf-8")
 with open(tmp / "cases.tsv", "w", encoding="utf-8") as index:
     for name, (body, rule, needle) in cases.items():
         (tmp / f"{name}.yml").write_text(json.dumps(body, ensure_ascii=False), encoding="utf-8")
@@ -133,6 +145,30 @@ assert any(needle in i["message"] for i in issues), (name, needle, issues)
 PY
 done < "$tmp/cases.tsv"
 echo "graph guard cases OK: $(wc -l < "$tmp/cases.tsv" | tr -d ' ')"
+for spec in "$tmp"/pass-*.yml; do
+  uv run "$DRAW" "$spec" --check > /dev/null || { echo "FAIL: $(basename "$spec") 應通過" >&2; exit 1; }
+done
+
+# 層框守門給的 shift 照著改就要通過
+uv run python3 - "$tmp" "$DRAW" <<'PY'
+import json, re, subprocess, sys
+from pathlib import Path
+tmp, draw = Path(sys.argv[1]), sys.argv[2]
+message = json.load(open(tmp / "label-on-frame.json", encoding="utf-8"))["issues"][0]["message"]
+spec = json.load(open(tmp / "label-on-frame.yml", encoding="utf-8"))
+spec["edges"][0]["shift"] = json.loads(re.search(r"shift: (\[[^\]]*\])", message).group(1))
+(tmp / "frame-fixed.yml").write_text(json.dumps(spec, ensure_ascii=False), encoding="utf-8")
+subprocess.run(["uv", "run", draw, str(tmp / "frame-fixed.yml"), "--check"], check=True, stdout=subprocess.DEVNULL)
+PY
+
+# 群組框內距要容得下最長的箭頭：從外面接到成員時，箭頭和框線之間還看得到線身
+uv run --with 'pyyaml>=6' python3 -c '
+import sys
+sys.path.insert(0, "scripts")
+import graph
+longest = max(head for _, head, _ in graph.WEIGHTS.values())
+assert graph.GROUP_PAD >= longest + 8, (graph.GROUP_PAD, longest)
+'
 
 # 5. 交叉的線畫跳線弧；從同一點分岔的線不算交叉
 uv run "$DRAW" assets/examples/order-fulfilment-graph.yml --check --svg "$tmp/graph.svg" > /dev/null
