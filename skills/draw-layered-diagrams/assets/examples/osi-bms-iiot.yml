@@ -1,0 +1,101 @@
+# 範例：兩欄對照、虛線的「標準之上」層、層間說明框、單一寬方塊。
+# 分層依各協定自己的標準歸位，OSI 只作對照；歸層與埠號於 2026-11-25 依一手來源核對（摘要與書目層級）：
+# ASHRAE 135（四層精簡架構、BVLL／BBMD、BACnet/SC 為資料鏈結選項）、Modbus 應用協定規範 V1.1b3（大端序）、
+# IANA 埠號登錄（opcua-tcp 4840、mqtt 1883、secure-mqtt 8883、coap 5683、coaps 5684）、RFC 7252、
+# KNX Association（耦合器過濾表、路由計數）、LoRa Alliance（LoRa 為實體層、LoRaWAN 為 MAC）。
+# ASHRAE 223P 於核對日仍是公開審查草案。
+title: BMS 與 IIoT 通訊協定的 OSI 七層架構
+subtitle: （建築管理系統與工業物聯網協定分層對照 — 協定依各自標準的分層歸位，OSI 僅作對照）
+footer: OSI 只保證位元送得到、格式解得開；跨系統的意義一致，要在 L7 之上靠資訊模型與本體
+label: OSI 分層
+columns:
+  - {title: BMS 建築管理系統, note: （空調・照明・電力・門禁）, color: blue}
+  - {title: IIoT 工業物聯網, note: （設備・產線・邊緣運算）, color: green}
+bands:
+  - color: rose
+    name: L7 之上
+    en: （語意層）
+    note: OSI 不管意義
+    dashed: true
+    cells:
+      - - [Brick Schema, 建築設備與點位本體, 以 RDF 描述關係]
+        - [Project Haystack, 點位語意標籤, 溫度、風門、設定值]
+        - [ASHRAE 223P, 建築語意資料模型, 審查中草案・RDF＋SHACL]
+      - - [OPC UA 資訊模型, Companion Spec, 設備節點型別標準化]
+        - [AAS 資產管理殼, 數位分身子模型, 跨廠商資產描述]
+        - [製造本體（OWL 2）, 共享識別與關係, 跨系統一致詮釋]
+    bridge: 資訊模型與本體：在 L7 協定之上統一「這筆資料是什麼」
+  - color: blue
+    name: L7 應用層
+    en: （Application）
+    note: 協定閘道・邊緣控制器
+    cells:
+      - - [BACnet, 物件屬性讀寫・COV, 交易狀態機・Invoke ID]
+        - [Modbus, 功能碼讀寫暫存器, 主從輪詢・RTU／TCP]
+        - [KNX／DALI, 群組通訊, 照明調光與場景]
+      - - [OPC UA, 節點讀寫・方法呼叫, 訂閱與告警事件]
+        - [MQTT／Sparkplug B, 主題發布／訂閱, 設備上下線狀態]
+        - [HTTP REST／CoAP, Web API 讀寫, 受限裝置輕量請求]
+  - color: purple
+    name: L6 表示層
+    en: （Presentation）
+    note: L7 協定內的功能
+    cells:
+      - - [BACnet 編碼, 標籤＋長度＋值, 標準歸在應用層]
+        - [Modbus 資料表示, 16 位元暫存器・大端序, 浮點與字組序由廠商約定]
+      - - [OPC UA 編碼, UA Binary／JSON, 結構化資料序列化]
+        - [Sparkplug B 載荷, Protobuf 二進位, 指標名稱＋時間戳]
+        - [TLS／DTLS, 加密與憑證, 常歸於 L5–L6]
+  - color: teal
+    name: L5 會話層
+    en: （Session）
+    note: L7 協定內的功能
+    cells:
+      - - [BACnet 沒有會話層, 四層精簡架構：實體・資料鏈結・網路・應用, 會話與表示功能都併入應用層]
+      - - [OPC UA 安全通道, SecureChannel, 簽章・加密模式]
+        - [OPC UA 會話, Session, 使用者身分驗證]
+        - [MQTT 會話, Keep Alive・持久會話, 遺囑訊息（LWT）]
+  - color: yellow
+    name: L4 傳輸層
+    en: （Transport）
+    note: 防火牆（埠號過濾）
+    cells:
+      - - [UDP 47808, 承載 BACnet/IP, 經 BVLL・可廣播]
+        - [TCP 502, 承載 Modbus TCP, MBAP 標頭在其上]
+        - [UDP 3671, 承載 KNXnet/IP, 通道單播・路由群播]
+      - - [TCP 4840, 承載 OPC UA, UA 連線協定（UACP）]
+        - [TCP 1883／8883, 承載 MQTT, 8883 走 TLS]
+        - [UDP 5683／5684, 承載 CoAP, 5684 走 DTLS]
+  - color: orange
+    name: L3 網路層
+    en: （Network）
+    note: 路由器・L3 交換器
+    cells:
+      - - [BACnet 網路層, NPDU・網路號碼, 路由器跨鏈結轉送]
+        - [KNX 網路層, 路由計數（似 TTL）, 耦合器依過濾表轉送]
+        - [IPv4／IPv6, 樓宇 IP 網段, 承載 BACnet/IP 等]
+      - - [IPv4／IPv6, OT 網段定址, 路由與 NAT]
+        - [6LoWPAN, IPv6 適配層, 壓縮標頭到 802.15.4]
+        - [IT／OT 分區, 防火牆與 DMZ, IEC 62443 區域與管道]
+  - color: green
+    name: L2 資料鏈結層
+    en: （Data Link）
+    note: 交換器・橋接器
+    cells:
+      - - [BACnet MS/TP, RS-485 令牌傳遞, 主站輪流發話]
+        - [BVLL 虛擬鏈結, BACnet/IP・BACnet/SC, 實際疊在 UDP／TCP 上]
+        - [802.15.4 MAC, Zigbee・Thread 的下層, 低功耗無線感測]
+      - - [即時乙太網路, PROFINET RT, EtherCAT・略過 TCP/IP]
+        - [TSN 時間敏感網路, IEEE 802.1 標準族, 確定性時槽排程]
+        - [VLAN 隔離, IEEE 802.1Q, 切分 OT 網段]
+  - color: gray
+    name: L1 實體層
+    en: （Physical）
+    note: 中繼器・媒體轉換器
+    cells:
+      - - [RS-485 雙絞線, 差動訊號・多點, 承載 MS/TP・Modbus RTU]
+        - [KNX TP／DALI, 雙線匯流排, 匯流排供電]
+        - [802.15.4 PHY, 2.4 GHz・Sub-GHz, Zigbee・Thread 的實體層]
+      - - [乙太網路 PHY, 銅纜・光纖, 工業 M12 接頭]
+        - [單對乙太網路, 10BASE-T1L（SPE）, 長距離到現場]
+        - [無線 PHY, 802.11・5G NR・LoRa, LoRaWAN 在 LoRa 之上]
