@@ -185,9 +185,14 @@
 
 `PATH` 可以給多個規格檔或目錄；目錄會遞迴找頂層有 `bands` 鍵的 `.yml`／`.yaml`，隱藏目錄與 `node_modules` 不看。結束碼取各份之中最大的；目錄裡沒有規格時印一行提示、以 `0` 結束。`-o` 與 `--svg` 只能配一個規格檔。
 
-- 守門：`uv run <技能目錄>/scripts/draw.py --check <目錄>`，不需要 Chrome，適合掛在消費端的 pre-push 或 CI。更新引擎後舊規格可能被新守門擋下，所以規格或引擎任一改動都驗整個目錄，不只驗改到的檔案。
-- 全部重畫：同一道指令去掉 `--check`。
+- 守門：`uv run <技能目錄>/scripts/draw.py --check --verify-png <目錄>`，不需要 Chrome，適合掛在消費端的 pre-push 或 CI。更新引擎後舊規格可能被新守門擋下，也可能讓畫面改變，所以規格、PNG 或引擎任一改動都驗整個目錄，不只驗改到的檔案。
+- 改規格途中只用 `--check`：這時 PNG 本來就還沒重畫。
+- 全部重畫：`draw.py <目錄>`。
+
+### `--verify-png`
+
+畫圖時引擎把整頁內容的 SHA-256 寫進 PNG 的 `tEXt` 區塊；`--verify-png`（要配 `--check`）重組目前的內容來比對，預設比對規格旁的同名 `.png`（單一規格可用 `-o` 指定）。下列情形以 `png` 擋下：沒有這張 PNG、不是 PNG、沒有指紋（舊版引擎畫的，或被其他工具改寫過），或指紋不符（改了規格沒重畫，或引擎更新讓畫面改變）。指紋只看內容，不看截圖的機器與倍率。會移除中繼資料的壓縮工具不要用在這些 PNG 上。
 
 ## 結束碼與 JSON
 
-`0` 成功；`1` 規格有誤、文字溢出或版面不乾淨（每條一行 `✗ [規則] 位置：說明`，一次處理多份時位置前加檔名；規則為 `schema`、`overflow` 或 `layout`）；`2` 執行環境問題（讀不到檔、找不到 Chrome、截圖失敗）。加 `--json` 時每份規格輸出一行 `{spec, ok, issues[{rule, where, message}], size, output}`，`--check` 的 `size` 是畫布尺寸，輸出 PNG 時是 PNG 尺寸。找 Chrome 的順序：環境變數 `CHROME`、macOS 的 Google Chrome、`PATH` 上的 `google-chrome`／`chromium`。
+`0` 成功；`1` 規格有誤、文字溢出或版面不乾淨（每條一行 `✗ [規則] 位置：說明`，一次處理多份時位置前加檔名；規則為 `schema`、`overflow`、`layout` 或 `png`）；`2` 執行環境問題（讀不到檔、找不到 Chrome、截圖失敗）。加 `--json` 時每份規格輸出一行 `{spec, ok, issues[{rule, where, message}], size, output}`，`--check` 的 `size` 是畫布尺寸，輸出 PNG 時是 PNG 尺寸。找 Chrome 的順序：環境變數 `CHROME`、macOS 的 Google Chrome、`PATH` 上的 `google-chrome`／`chromium`。

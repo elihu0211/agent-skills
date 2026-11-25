@@ -12,24 +12,28 @@
 用法：
   uv run draw.py SPEC.yml                  輸出與 SPEC 同名的 .png
   uv run draw.py --check DIR               驗目錄下的每一份規格（可混著給多個檔案與目錄；不加 --check 就全部重畫）
+  uv run draw.py --check --verify-png DIR  另驗每份規格旁的 PNG 是目前的規格與引擎畫出來的（守門用）
   uv run draw.py SPEC.yml -o OUT.png       指定輸出路徑
   uv run draw.py SPEC.yml --check [--json] 只驗規格與文字寬度，不需要 Chrome
   uv run draw.py SPEC.yml --svg OUT.svg    另存中間 SVG（除錯用）
 
-結束碼：0 成功｜1 規格有誤、文字溢出或版面不乾淨｜2 執行環境問題（讀不到檔、找不到 Chrome、截圖失敗）。
+結束碼：0 成功｜1 規格有誤、文字溢出、版面不乾淨或 PNG 過期｜2 執行環境問題（讀不到檔、找不到 Chrome、截圖失敗）。
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import platform
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
+import zlib
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from xml.sax.saxutils import escape
@@ -302,6 +306,54 @@ def render(m: dict) -> tuple[str, list[Issue], tuple[int, int]]:
     return wrap_svg(c, g.w, h, m["title"]), c.issues, (g.w, h)
 
 
+# ---------- 內容指紋 ----------
+
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+# 指紋放在 PNG 的 tEXt 區塊，開頭是關鍵字與分隔用的 NUL
+FINGERPRINT_KEY = b"draw-layered-diagrams\0"
+
+
+def page_html(svg: str) -> str:
+    return f'<html><body style="margin:0;background:#FFFFFF">{svg}</body></html>'
+
+
+def fingerprint(svg: str) -> str:
+    """圖的內容指紋：送進 Chrome 的整頁。只由規格與引擎決定，和哪台機器、哪個倍率截圖無關。"""
+    return hashlib.sha256(page_html(svg).encode("utf-8")).hexdigest()
+
+
+def stamp(png: bytes, digest: str) -> bytes:
+    """在 IHDR 之後插入帶指紋的 tEXt 區塊。"""
+    data = FINGERPRINT_KEY + digest.encode("ascii")
+    chunk = struct.pack(">I", len(data)) + b"tEXt" + data + struct.pack(">I", zlib.crc32(b"tEXt" + data))
+    after_ihdr = len(PNG_SIGNATURE) + 25  # 長度 4＋型別 4＋資料 13＋CRC 4
+    return png[:after_ihdr] + chunk + png[after_ihdr:]
+
+
+def read_fingerprint(png: bytes) -> str | None:
+    at = len(PNG_SIGNATURE)
+    while at + 12 <= len(png):
+        (length,) = struct.unpack(">I", png[at : at + 4])
+        kind, data = png[at + 4 : at + 8], png[at + 8 : at + 8 + length]
+        if kind == b"tEXt" and data.startswith(FINGERPRINT_KEY):
+            return data[len(FINGERPRINT_KEY) :].decode("ascii", "replace")
+        at += 12 + length
+    return None
+
+
+def stale_reason(out: Path, digest: str) -> str | None:
+    """out 不是由這份指紋畫出來的原因；是最新的回傳 None。"""
+    if not out.is_file():
+        return "沒有這張 PNG"
+    png = out.read_bytes()
+    if not png.startswith(PNG_SIGNATURE):
+        return "不是 PNG"
+    found = read_fingerprint(png)
+    if found is None:
+        return "沒有內容指紋（舊版引擎畫的，或被其他工具改寫過）"
+    return None if found == digest else "不是由目前的規格與引擎畫出"
+
+
 # ---------- 輸出 ----------
 
 
@@ -324,7 +376,9 @@ def to_png(svg: str, size: tuple[int, int], scale: int, out: Path) -> None:
     w, h = size
     with tempfile.TemporaryDirectory() as tmp:
         page = Path(tmp) / "page.html"
-        page.write_text(f'<html><body style="margin:0;background:#FFFFFF">{svg}</body></html>', encoding="utf-8")
+        page.write_text(page_html(svg), encoding="utf-8")
+        # 先截到暫存檔：Chrome 沒寫出圖卻回 0 時，舊 PNG 不能蓋上新指紋被當成最新
+        shot = Path(tmp) / "shot.png"
         cmd = [
             chrome,
             "--headless=new",
@@ -332,14 +386,15 @@ def to_png(svg: str, size: tuple[int, int], scale: int, out: Path) -> None:
             "--hide-scrollbars",
             f"--user-data-dir={Path(tmp) / 'profile'}",
             f"--force-device-scale-factor={scale}",
-            f"--screenshot={out}",
+            f"--screenshot={shot}",
             f"--window-size={w},{h}",
         ]
         if platform.system() == "Linux":
             cmd.append("--no-sandbox")
         result = subprocess.run([*cmd, page.as_uri()], check=False, capture_output=True, text=True)
-        if result.returncode != 0 or not out.is_file():
+        if result.returncode != 0 or not shot.is_file():
             raise RuntimeError(f"Chrome 截圖失敗（結束碼 {result.returncode}）：{result.stderr.strip()[-500:]}")
+        out.write_bytes(stamp(shot.read_bytes(), fingerprint(svg)))
 
 
 # ---------- 命令列 ----------
@@ -398,14 +453,21 @@ def run(path: Path, args: argparse.Namespace, many: bool) -> int:
     if args.svg:
         args.svg.write_text(svg, encoding="utf-8")
     if args.check:
+        passed = "規格與文字寬度通過"
+        if args.verify_png:
+            png = args.output or path.with_suffix(".png")
+            if reason := stale_reason(png, fingerprint(svg)):
+                report(False, [Issue("png", png.name, f"{reason}：去掉 --check 重畫，PNG 與規格一起提交")], list(size))
+                return 1
+            passed += "，PNG 是最新的"
         report(True, [], list(size))
         if not args.json:
-            print(f"✓ {prefix}規格與文字寬度通過（畫布 {size[0]}×{size[1]}）")
+            print(f"✓ {prefix}{passed}（畫布 {size[0]}×{size[1]}）")
         return 0
     out = args.output or path.with_suffix(".png")
     try:
         to_png(svg, size, args.scale, out)
-    except RuntimeError as e:
+    except (RuntimeError, OSError) as e:
         print(f"✗ {prefix}{e}", file=sys.stderr)
         return 2
     report(True, [], [size[0] * args.scale, size[1] * args.scale], str(out))
@@ -417,7 +479,7 @@ def run(path: Path, args: argparse.Namespace, many: bool) -> int:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description="把 YAML 規格畫成淡色層帶風格的分層圖，直接輸出兩倍解析度 PNG。",
-        epilog="結束碼：0 成功｜1 規格有誤、文字溢出或版面不乾淨｜2 執行環境問題。",
+        epilog="結束碼：0 成功｜1 規格有誤、文字溢出、版面不乾淨或 PNG 過期｜2 執行環境問題。",
     )
     ap.add_argument("paths", type=Path, nargs="+", metavar="PATH",
                     help="YAML 規格檔或目錄；目錄會遞迴找頂層有 bands 的 .yml／.yaml（寫法見 references/spec.md）")
@@ -425,12 +487,16 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--scale", type=int, default=2, choices=(1, 2, 3), help="PNG 倍率（預設 2）")
     ap.add_argument("--svg", type=Path, help="另存中間 SVG（除錯用；只能配一個規格檔）")
     ap.add_argument("--check", action="store_true", help="只驗規格與文字寬度，不輸出 PNG、不需要 Chrome")
+    ap.add_argument("--verify-png", action="store_true",
+                    help="配 --check：另驗 PNG（預設與規格同名）是目前的規格與引擎畫出來的，不需要 Chrome")
     ap.add_argument("--json", action="store_true", help="以 JSON 輸出結果，每份規格一行（spec、ok、issues、size、output）")
     args = ap.parse_args(argv)
 
     many = len(args.paths) > 1 or args.paths[0].is_dir()
     if many and (args.output or args.svg):
         ap.error("-o 與 --svg 只能配一個規格檔")
+    if args.verify_png and not args.check:
+        ap.error("--verify-png 要配 --check")
     specs = [spec for path in args.paths for spec in (find_specs(path) if path.is_dir() else [path])]
     if not specs:
         print("沒有找到分層圖規格（頂層有 bands 的 .yml／.yaml）", file=sys.stderr)

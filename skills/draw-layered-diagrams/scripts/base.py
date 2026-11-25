@@ -28,7 +28,7 @@ LINE_STYLE = ((22, 800), (18, 700), (16, 500))
 
 @dataclass
 class Issue:
-    rule: str  # schema｜overflow｜layout
+    rule: str  # schema｜overflow｜layout｜png
     where: str
     message: str
 
