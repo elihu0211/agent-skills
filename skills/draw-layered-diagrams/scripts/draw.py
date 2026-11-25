@@ -11,6 +11,7 @@
 
 用法：
   uv run draw.py SPEC.yml                  輸出與 SPEC 同名的 .png
+  uv run draw.py --check DIR               驗目錄下的每一份規格（可混著給多個檔案與目錄；不加 --check 就全部重畫）
   uv run draw.py SPEC.yml -o OUT.png       指定輸出路徑
   uv run draw.py SPEC.yml --check [--json] 只驗規格與文字寬度，不需要 Chrome
   uv run draw.py SPEC.yml --svg OUT.svg    另存中間 SVG（除錯用）
@@ -24,6 +25,7 @@ import argparse
 import json
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -340,34 +342,48 @@ def to_png(svg: str, size: tuple[int, int], scale: int, out: Path) -> None:
             raise RuntimeError(f"Chrome 截圖失敗（結束碼 {result.returncode}）：{result.stderr.strip()[-500:]}")
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(
-        description="把 YAML 規格畫成淡色層帶風格的分層圖，直接輸出兩倍解析度 PNG。",
-        epilog="結束碼：0 成功｜1 規格有誤、文字溢出或版面不乾淨｜2 執行環境問題。",
-    )
-    ap.add_argument("spec", type=Path, help="YAML 規格檔（寫法見 references/spec.md）")
-    ap.add_argument("-o", "--output", type=Path, help="輸出 PNG（預設與規格同名、副檔名 .png）")
-    ap.add_argument("--scale", type=int, default=2, choices=(1, 2, 3), help="PNG 倍率（預設 2）")
-    ap.add_argument("--svg", type=Path, help="另存中間 SVG（除錯用）")
-    ap.add_argument("--check", action="store_true", help="只驗規格與文字寬度，不輸出 PNG、不需要 Chrome")
-    ap.add_argument("--json", action="store_true", help="以 JSON 輸出結果（ok、issues、size、output）")
-    args = ap.parse_args(argv)
+# ---------- 命令列 ----------
+
+
+def is_spec(path: Path) -> bool:
+    """分層圖規格＝頂層有 bands 鍵的 YAML。解析不了的檔案看有沒有頂格的 bands:，寫壞的規格才不會被當成別的檔案略過。"""
+    raw = path.read_bytes()
+    try:
+        data = yaml.safe_load(raw.decode("utf-8"))
+    except (ValueError, yaml.YAMLError):
+        return re.search(rb"^bands\s*:", raw, re.MULTILINE) is not None
+    return isinstance(data, dict) and "bands" in data
+
+
+def find_specs(root: Path) -> list[Path]:
+    """目錄下的規格。隱藏目錄（版控、虛擬環境、裝在裡面的技能範例）與 node_modules 不看，也不跟著符號連結走。"""
+    found = []
+    for folder, dirs, files in os.walk(root):
+        dirs[:] = sorted(d for d in dirs if not d.startswith(".") and d != "node_modules")
+        candidates = (Path(folder) / name for name in sorted(files) if name.endswith((".yml", ".yaml")))
+        found += [path for path in candidates if path.is_file() and is_spec(path)]
+    return found
+
+
+def run(path: Path, args: argparse.Namespace, many: bool) -> int:
+    """處理一份規格，回傳結束碼；many 時每行訊息都帶檔名。"""
+    prefix = f"{path}：" if many else ""
 
     def report(ok: bool, issues: list[Issue], size=None, output=None) -> None:
         if args.json:
-            print(json.dumps({"ok": ok, "issues": [asdict(i) for i in issues], "size": size, "output": output},
-                             ensure_ascii=False))
+            result = {"spec": str(path), "ok": ok, "issues": [asdict(i) for i in issues]}
+            print(json.dumps({**result, "size": size, "output": output}, ensure_ascii=False))
             return
         for i in issues:
-            print(f"✗ [{i.rule}] {i.where}：{i.message}", file=sys.stderr)
+            print(f"✗ [{i.rule}] {prefix}{i.where}：{i.message}", file=sys.stderr)
 
     try:
-        spec = yaml.safe_load(args.spec.read_text(encoding="utf-8"))
+        spec = yaml.safe_load(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError) as e:
-        print(f"✗ 讀不到規格檔：{e}", file=sys.stderr)
+        print(f"✗ {prefix}讀不到規格檔：{e}", file=sys.stderr)
         return 2
     except yaml.YAMLError as e:
-        report(False, [Issue("schema", str(args.spec), f"YAML 語法錯誤：{e}")])
+        report(False, [Issue("schema", str(path), f"YAML 語法錯誤：{e}")])
         return 1
 
     mode = graph if graph.is_graph(spec) else None
@@ -384,18 +400,41 @@ def main(argv: list[str] | None = None) -> int:
     if args.check:
         report(True, [], list(size))
         if not args.json:
-            print(f"✓ 規格與文字寬度通過（畫布 {size[0]}×{size[1]}）")
+            print(f"✓ {prefix}規格與文字寬度通過（畫布 {size[0]}×{size[1]}）")
         return 0
-    out = args.output or args.spec.with_suffix(".png")
+    out = args.output or path.with_suffix(".png")
     try:
         to_png(svg, size, args.scale, out)
     except RuntimeError as e:
-        print(f"✗ {e}", file=sys.stderr)
+        print(f"✗ {prefix}{e}", file=sys.stderr)
         return 2
     report(True, [], [size[0] * args.scale, size[1] * args.scale], str(out))
     if not args.json:
         print(f"✓ 輸出 {out}（{size[0] * args.scale}×{size[1] * args.scale}）")
     return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(
+        description="把 YAML 規格畫成淡色層帶風格的分層圖，直接輸出兩倍解析度 PNG。",
+        epilog="結束碼：0 成功｜1 規格有誤、文字溢出或版面不乾淨｜2 執行環境問題。",
+    )
+    ap.add_argument("paths", type=Path, nargs="+", metavar="PATH",
+                    help="YAML 規格檔或目錄；目錄會遞迴找頂層有 bands 的 .yml／.yaml（寫法見 references/spec.md）")
+    ap.add_argument("-o", "--output", type=Path, help="輸出 PNG（預設與規格同名、副檔名 .png；只能配一個規格檔）")
+    ap.add_argument("--scale", type=int, default=2, choices=(1, 2, 3), help="PNG 倍率（預設 2）")
+    ap.add_argument("--svg", type=Path, help="另存中間 SVG（除錯用；只能配一個規格檔）")
+    ap.add_argument("--check", action="store_true", help="只驗規格與文字寬度，不輸出 PNG、不需要 Chrome")
+    ap.add_argument("--json", action="store_true", help="以 JSON 輸出結果，每份規格一行（spec、ok、issues、size、output）")
+    args = ap.parse_args(argv)
+
+    many = len(args.paths) > 1 or args.paths[0].is_dir()
+    if many and (args.output or args.svg):
+        ap.error("-o 與 --svg 只能配一個規格檔")
+    specs = [spec for path in args.paths for spec in (find_specs(path) if path.is_dir() else [path])]
+    if not specs:
+        print("沒有找到分層圖規格（頂層有 bands 的 .yml／.yaml）", file=sys.stderr)
+    return max((run(spec, args, many) for spec in specs), default=0)
 
 
 if __name__ == "__main__":

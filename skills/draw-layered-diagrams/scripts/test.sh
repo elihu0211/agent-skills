@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# draw-layered-diagrams 測試：--help、每個範例 --check 通過、溢字與規格錯誤以結束碼 1 擋下並回報規則、
+# draw-layered-diagrams 測試：--help、每個範例 --check 通過、目錄與多檔的規格探索與結束碼、溢字與規格錯誤以結束碼 1 擋下並回報規則、
 # 節點圖的版面守門逐條擋得下、交叉畫跳線弧、--json 可解析、--svg 是合法 XML；有 Chrome 時另驗 PNG 尺寸為畫布兩倍，沒有就略過這一段。
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -179,7 +179,47 @@ python3 -c "import sys, xml.etree.ElementTree as ET; ET.parse(sys.argv[1])" "$tm
 uv run "$DRAW" assets/examples/three-tier-web.yml --check --svg "$tmp/web.svg" > /dev/null
 python3 -c "import sys, xml.etree.ElementTree as ET; ET.parse(sys.argv[1])" "$tmp/web.svg"
 
-# 7. 有 Chrome 才驗 PNG：尺寸要是畫布的兩倍
+# 7. 目錄與多檔：遞迴找出規格（含寫壞的），略過別的 YAML、隱藏目錄與 node_modules；結束碼取最大
+repo="$tmp/repo"
+mkdir -p "$repo/docs/sub" "$repo/.agents" "$repo/node_modules"
+cp assets/examples/three-tier-web.yml "$repo/docs/ok.yml"
+cp assets/examples/osi-bms-iiot.yml "$repo/docs/sub/ok-too.yaml"
+printf 'title: 壞色票\nbands:\n  - {color: pink, name: 一層, boxes: [[甲]]}\n' > "$repo/docs/sub/bad.yml"
+printf 'title: 語法錯誤\nbands:\n  - {color: blue\n' > "$repo/docs/broken.yml"
+printf 'slides:\n  - title: 簡報規格不是分層圖\n' > "$repo/docs/deck.yml"
+printf 'name: {{ 樣板 }}: x\n' > "$repo/docs/template.yml"
+cp "$repo/docs/sub/bad.yml" "$repo/.agents/hidden.yml"
+cp "$repo/docs/sub/bad.yml" "$repo/node_modules/vendored.yml"
+set +e
+uv run "$DRAW" --check --json "$repo" > "$tmp/dir.jsonl"
+rc=$?
+set -e
+[ "$rc" -eq 1 ] || { echo "FAIL: 目錄裡有壞規格應以 1 結束，實得 $rc" >&2; exit 1; }
+python3 - "$tmp/dir.jsonl" "$repo" <<'PY'
+import json, sys
+from pathlib import Path
+root = Path(sys.argv[2])
+got = {str(Path(r["spec"]).relative_to(root)): r["ok"]
+       for r in map(json.loads, open(sys.argv[1], encoding="utf-8"))}
+want = {"docs/ok.yml": True, "docs/sub/ok-too.yaml": True, "docs/sub/bad.yml": False, "docs/broken.yml": False}
+assert got == want, got
+print("directory check OK:", len(got), "specs")
+PY
+rm "$repo/docs/sub/bad.yml" "$repo/docs/broken.yml"
+uv run "$DRAW" --check "$repo" > /dev/null || { echo "FAIL: 只剩好規格的目錄應通過" >&2; exit 1; }
+mkdir "$tmp/empty"
+uv run "$DRAW" --check "$tmp/empty" 2> "$tmp/empty.err" || { echo "FAIL: 沒有規格的目錄應以 0 結束" >&2; exit 1; }
+grep -q "沒有找到分層圖規格" "$tmp/empty.err" || { echo "FAIL: 沒有規格時要提示" >&2; exit 1; }
+for case in "-o $tmp/x.png $repo" "--check $repo/docs/ok.yml $tmp/nope.yml"; do
+  set +e
+  # shellcheck disable=SC2086
+  uv run "$DRAW" $case > /dev/null 2>&1
+  rc=$?
+  set -e
+  [ "$rc" -eq 2 ] || { echo "FAIL: draw.py $case 應以 2 結束，實得 $rc" >&2; exit 1; }
+done
+
+# 8. 有 Chrome 才驗 PNG：尺寸要是畫布的兩倍
 uv run "$DRAW" assets/examples/three-tier-web.yml --check --json > "$tmp/size.json"
 set +e
 uv run "$DRAW" assets/examples/three-tier-web.yml -o "$tmp/web.png" > /dev/null 2> "$tmp/png.err"

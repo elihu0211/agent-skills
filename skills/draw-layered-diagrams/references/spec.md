@@ -15,7 +15,7 @@
 
 - 層帶模式：[頂層](#頂層)、[`columns`](#columns)、[`bands`](#bands)、[方塊](#方塊)、[字數參考](#字數參考)
 - [節點圖模式](#節點圖模式)：節點、連線、走線規則與版面守門
-- 兩種模式共用：[色票](#色票)、[結束碼與 JSON](#結束碼與-json)
+- 兩種模式共用：[色票](#色票)、[一次處理多份規格](#一次處理多份規格)、[結束碼與 JSON](#結束碼與-json)
 
 ## 頂層
 
@@ -181,6 +181,13 @@
 
 同一張圖相鄰兩層用不同顏色；同一個意思在系列圖裡用同一個顏色。說明框沿用它上方那一層的顏色。
 
+## 一次處理多份規格
+
+`PATH` 可以給多個規格檔或目錄；目錄會遞迴找頂層有 `bands` 鍵的 `.yml`／`.yaml`，隱藏目錄與 `node_modules` 不看。結束碼取各份之中最大的；目錄裡沒有規格時印一行提示、以 `0` 結束。`-o` 與 `--svg` 只能配一個規格檔。
+
+- 守門：`uv run <技能目錄>/scripts/draw.py --check <目錄>`，不需要 Chrome，適合掛在消費端的 pre-push 或 CI。更新引擎後舊規格可能被新守門擋下，所以規格或引擎任一改動都驗整個目錄，不只驗改到的檔案。
+- 全部重畫：同一道指令去掉 `--check`。
+
 ## 結束碼與 JSON
 
-`0` 成功；`1` 規格有誤、文字溢出或版面不乾淨（每條一行 `✗ [規則] 位置：說明`，規則為 `schema`、`overflow` 或 `layout`）；`2` 執行環境問題（讀不到檔、找不到 Chrome、截圖失敗）。加 `--json` 時輸出 `{ok, issues[{rule, where, message}], size, output}`，`--check` 的 `size` 是畫布尺寸，輸出 PNG 時是 PNG 尺寸。找 Chrome 的順序：環境變數 `CHROME`、macOS 的 Google Chrome、`PATH` 上的 `google-chrome`／`chromium`。
+`0` 成功；`1` 規格有誤、文字溢出或版面不乾淨（每條一行 `✗ [規則] 位置：說明`，一次處理多份時位置前加檔名；規則為 `schema`、`overflow` 或 `layout`）；`2` 執行環境問題（讀不到檔、找不到 Chrome、截圖失敗）。加 `--json` 時每份規格輸出一行 `{spec, ok, issues[{rule, where, message}], size, output}`，`--check` 的 `size` 是畫布尺寸，輸出 PNG 時是 PNG 尺寸。找 Chrome 的順序：環境變數 `CHROME`、macOS 的 Google Chrome、`PATH` 上的 `google-chrome`／`chromium`。
