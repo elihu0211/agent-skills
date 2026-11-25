@@ -331,6 +331,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return args.fn(args)
     except (SpecError, brand.BrandError, design.DesignError) as e:
         print(f"規格有誤：{e}", file=sys.stderr)
+        if isinstance(e, SpecError):
+            print("（欄位表：deckstyle schema spec；第 N 頁從封面算起）", file=sys.stderr)
         return 1
     except FileNotFoundError as e:
         print(f"檔案不存在：{e}", file=sys.stderr)

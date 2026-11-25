@@ -9,6 +9,11 @@ snake_case，之後引擎、匯出器與驗證都吃同一份形狀。只有一�
   內容頁另有 `blocks`；每個區塊是 `{block: 名稱, ...欄位}`。
 
 規格寫錯就在繪圖前停下，訊息帶頁碼、區塊與欄位，不讓 `KeyError` 或 `TypeError` 漏到使用者眼前。
+
+查規格錯誤：訊息的「第 N 頁」從封面算起（封面是第 1 頁，`slides` 的第一項是第 2 頁）。每個區塊的必填與選填欄位
+在下面的 `BLOCK_SCHEMA`；`deckstyle schema spec -o spec.schema.json` 輸出同一份 JSON Schema，`deck.yml` 檔頭加
+`# yaml-language-server: $schema=spec.schema.json` 就能讓編輯器即時標出寫錯的欄位。各區塊的寫法與範例在技能的
+`SKILL.md` 與 `references/declarations.md`、`references/patterns.md`。
 """
 
 from __future__ import annotations
