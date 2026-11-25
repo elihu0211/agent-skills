@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # draw-layered-diagrams 測試：--help、每個範例 --check 通過、溢字與規格錯誤以結束碼 1 擋下並回報規則、
-# --json 可解析、--svg 是合法 XML；有 Chrome 時另驗 PNG 尺寸為畫布兩倍，沒有就略過這一段。
+# 節點圖的版面守門逐條擋得下、交叉畫跳線弧、--json 可解析、--svg 是合法 XML；有 Chrome 時另驗 PNG 尺寸為畫布兩倍，沒有就略過這一段。
 set -euo pipefail
 cd "$(dirname "$0")/.."
 DRAW=scripts/draw.py
@@ -67,11 +67,73 @@ for expected in ("bands[1].color", "bands[1].cells", "bands[2].cells[1][1]", "ba
 print("JSON check OK:", len(schema["issues"]), "schema issues")
 PY
 
-# 4. --svg 是合法 XML
+# 4. 節點圖模式的規格錯誤與版面守門：每個案例只壞一件事，回報的規則與訊息要對得上
+python3 - "$tmp" <<'PY'
+"""寫出故意弄壞的節點圖規格；cases.tsv 記每個檔案應回報的規則與訊息片段。"""
+import json, sys
+from pathlib import Path
+
+tmp = Path(sys.argv[1])
+def spec(nodes, edges=(), **band):
+    return {"title": "守門測試", "bands": [{"color": "blue", "name": "一層", "rows": nodes, **band}], "edges": list(edges)}
+def node(i, col, span=6, **extra):
+    return {"id": i, "at": [col, span], "text": [i], **extra}
+
+row = [node("a", 1), node("b", 16), node("c", 31)]
+two_rows = [[node("a", 1)], [node("b", 31)]]
+cases = {
+    # 版面
+    "through-node": (spec([row], [{"from": "a", "to": "c"}]), "layout", "穿過或貼到節點 b"),
+    "node-overlap": (spec([[node("a", 1, 8), node("b", 8)]]), "layout", "重疊"),
+    "label-on-node": (spec([row], [{"from": "a", "to": "b", "label": "這個標籤比兩個節點之間的空隙寬很多很多"}]),
+                      "layout", "壓到節點"),
+    "short-arrow": (spec([[node("a", 1), node("b", 7.3)]], [{"from": "a", "to": "b"}]), "layout", "線段太短"),
+    "stacked-lines": (spec(two_rows, [{"from": "a.bottom@0.3", "to": "b.top@0.3"},
+                                      {"from": "a.bottom@0.7", "to": "b.top@0.7"}], row_gap=90),
+                      "layout", "疊在一起"),
+    "leaves-bands": (spec([row], [{"from": "a.top", "to": "c.top", "depth": 120}]), "layout", "跑出層帶區域"),
+    "into-panel": (spec([row], [{"from": "a.left", "to": "c.left", "depth": 60}]), "layout", "左側層名面板"),
+    # 規格
+    "unknown-node": (spec([row], [{"from": "a", "to": "zz"}]), "schema", "沒有這個節點"),
+    "bad-side": (spec([row], [{"from": "a.middle", "to": "b"}]), "schema", "邊只有"),
+    "off-grid": (spec([[node("a", 46)]]), "schema", "超出格線"),
+    "duplicate-id": (spec([[node("a", 1), node("a", 16)]]), "schema", "id 重複"),
+    "bad-accent": (spec([[node("a", 1, accent=3)]]), "schema", "行號"),
+    "bad-divider": (spec([[node("a", 1, divider=1)]]), "schema", "分隔線"),
+    "bad-fill": (spec([[node("a", 1, fill="blue")]]), "schema", "white, tint"),
+    "bad-band-en": (spec([row], en=["一", "二", "三"]), "schema", "2 行清單"),
+    "bridge-in-graph": (spec([row], bridge="節點圖模式沒有層間說明框"), "schema", "不認得的鍵"),
+}
+with open(tmp / "cases.tsv", "w", encoding="utf-8") as index:
+    for name, (body, rule, needle) in cases.items():
+        (tmp / f"{name}.yml").write_text(json.dumps(body, ensure_ascii=False), encoding="utf-8")
+        index.write(f"{name}\t{rule}\t{needle}\n")
+PY
+while IFS=$'\t' read -r name rule needle; do
+  if uv run "$DRAW" "$tmp/$name.yml" --check --json > "$tmp/$name.json"; then
+    echo "FAIL: $name 應被擋下" >&2
+    exit 1
+  fi
+  python3 - "$tmp/$name.json" "$name" "$rule" "$needle" <<'PY'
+import json, sys
+path, name, rule, needle = sys.argv[1:]
+issues = json.load(open(path, encoding="utf-8"))["issues"]
+assert issues and {i["rule"] for i in issues} == {rule}, (name, issues)
+assert any(needle in i["message"] for i in issues), (name, needle, issues)
+PY
+done < "$tmp/cases.tsv"
+echo "graph guard cases OK: $(wc -l < "$tmp/cases.tsv" | tr -d ' ')"
+
+# 5. 交叉的線畫跳線弧；從同一點分岔的線不算交叉
+uv run "$DRAW" assets/examples/order-fulfilment-graph.yml --check --svg "$tmp/graph.svg" > /dev/null
+grep -q "A9,9 0 0" "$tmp/graph.svg" || { echo "FAIL: 範例裡的交叉沒有畫跳線弧" >&2; exit 1; }
+python3 -c "import sys, xml.etree.ElementTree as ET; ET.parse(sys.argv[1])" "$tmp/graph.svg"
+
+# 6. --svg 是合法 XML
 uv run "$DRAW" assets/examples/three-tier-web.yml --check --svg "$tmp/web.svg" > /dev/null
 python3 -c "import sys, xml.etree.ElementTree as ET; ET.parse(sys.argv[1])" "$tmp/web.svg"
 
-# 5. 有 Chrome 才驗 PNG：尺寸要是畫布的兩倍
+# 7. 有 Chrome 才驗 PNG：尺寸要是畫布的兩倍
 uv run "$DRAW" assets/examples/three-tier-web.yml --check --json > "$tmp/size.json"
 set +e
 uv run "$DRAW" assets/examples/three-tier-web.yml -o "$tmp/web.png" > /dev/null 2> "$tmp/png.err"
