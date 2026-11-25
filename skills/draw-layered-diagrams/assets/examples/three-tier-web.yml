@@ -1,0 +1,29 @@
+# 範例：單欄（不寫 columns，每層用 boxes）、帶方向箭頭的層間說明框、層名面板只有兩行。
+title: 三層式 Web 應用架構
+subtitle: （表現層、應用層、資料層各管一件事 — 請求由上而下、回應由下而上）
+footer: 每層只依賴下一層，換掉一層的實作不必改動另一層
+bands:
+  - color: blue
+    name: 表現層
+    en: （Presentation）
+    boxes:
+      - [瀏覽器, HTML・CSS・JavaScript, 單頁應用與伺服器端渲染]
+      - [行動 App, 原生或跨平台, 呼叫同一組 API]
+      - [CDN, 靜態資源快取, 就近回應使用者]
+    bridge: {text: HTTPS 請求與 JSON 回應, arrow: both}
+  - color: green
+    name: 應用層
+    en: （Application）
+    note: 負載平衡器在前
+    boxes:
+      - [API 閘道, 驗證與限流, 依路徑轉送到服務]
+      - [業務服務, 商業規則, 無狀態・可水平擴充]
+      - [背景工作, 排程與佇列, 非同步處理耗時任務]
+    bridge: {text: 查詢與交易, arrow: both}
+  - color: yellow
+    name: 資料層
+    en: （Data）
+    boxes:
+      - [關聯式資料庫, 交易與一致性, 主從複寫]
+      - [快取, 熱資料, 降低資料庫負載]
+      - [物件儲存, 檔案與備份, 保留多個版本]

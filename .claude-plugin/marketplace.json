@@ -87,6 +87,15 @@
       "skills": [
         "./skills/draw-mermaid-diagrams"
       ]
+    },
+    {
+      "name": "draw-layered-diagrams",
+      "description": "Draw layered architecture and layer-by-layer comparison diagrams from a YAML spec as 2x PNG in one consistent pastel-band style, stopping on text overflow",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./skills/draw-layered-diagrams"
+      ]
     }
   ]
 }

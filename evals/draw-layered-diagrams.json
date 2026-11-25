@@ -1,0 +1,61 @@
+{
+  "skill": "draw-layered-diagrams",
+  "cases": [
+    {
+      "id": "osi-comparison-png",
+      "query": "幫我畫一張 OSI 七層對照圖，比較 Modbus 跟 OPC UA 各落在哪一層，輸出高解析 PNG 放進 docs/assets/ 給報告用。",
+      "expected_behavior": [
+        "先依協定自己的標準查證歸層，在規格檔頂端註解核對日期與來源",
+        "寫兩欄 columns、七層 bands 的 YAML 規格，放在 PNG 旁同名 .yml",
+        "draw.py --check 通過後輸出兩倍解析度 PNG，文件只引用 PNG"
+      ],
+      "setup": {
+        "files": {
+          "docs/report.md": "# 通訊協定比較\n\n（待補圖）\n"
+        }
+      }
+    },
+    {
+      "id": "restyle-architecture-figure",
+      "query": "docs/architecture.md 那張三層式架構的示意圖跟其他圖風格不一致，改畫成淡色層帶加白色圓角方塊的 PNG，跟系列圖統一。",
+      "expected_behavior": [
+        "依文件內容整理出各層與方塊，寫成單欄 bands 的 YAML 規格",
+        "draw.py --check 通過後輸出 PNG 並打開檢查版面",
+        "把文件中的圖片引用改成新的 PNG，規格與 PNG 一起提交"
+      ],
+      "setup": {
+        "files": {
+          "docs/architecture.md": "# 系統架構\n\n表現層：瀏覽器、行動 App。\n應用層：API 閘道、業務服務。\n資料層：PostgreSQL、Redis。\n\n![架構](assets/architecture.jpg)\n"
+        }
+      }
+    },
+    {
+      "id": "pipeline-with-flow-arrows",
+      "query": "畫一張邊緣到雲端的 IIoT 資料管線分層圖：設備、工業閘道、訊息匯流排、雲端分析四層，層跟層之間要標出資料怎麼往上流，輸出 PNG。",
+      "expected_behavior": [
+        "四層單欄規格，層間以 bridge 寫流動的資料並設 arrow 方向",
+        "footer 寫一句整張圖的結論",
+        "draw.py --check 通過後輸出 PNG，尺寸為畫布兩倍"
+      ],
+      "setup": {
+        "files": {
+          "README.md": "# IIoT 平台\n"
+        }
+      }
+    },
+    {
+      "id": "fix-overflow-report",
+      "query": "docs/stack.yml 跑 draw.py 回報 overflow，有兩個方塊的字放不下，幫我修好重新出圖。",
+      "expected_behavior": [
+        "縮短字句或把內容挪到重點、補充行，不改字級或方塊尺寸",
+        "重跑 draw.py --check 直到結束碼 0",
+        "重新輸出 PNG"
+      ],
+      "setup": {
+        "files": {
+          "docs/stack.yml": "title: 技術堆疊\nbands:\n  - color: blue\n    name: 前端\n    boxes:\n      - [這個框架名稱寫得非常非常非常非常長一定放不下]\n      - [狀態管理]\n      - [樣式系統]\n      - [測試工具]\n"
+        }
+      }
+    }
+  ]
+}
