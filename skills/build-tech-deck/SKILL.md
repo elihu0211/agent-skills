@@ -1,8 +1,8 @@
 ---
 name: build-tech-deck
 description: >-
-  以 python-pptx 與宣告式 YAML 規格（deck.yml）生成高密度技術簡報（PPTX）：白底細線圓角、藍綠琥珀玫紅語義色票（品牌讀 Quarto 的 brand.yml）、真正的 PPTX 範本與具名版面、圖表、大數字與實際畫面截圖區塊、單行不折行與白話命名，附可執行的範本與零折行 lint。
-  用於製作、重排或美化技術提案、專題報告、工程架構與客戶說明投影片，把實際畫面截圖放進簡報，更換品牌色或作者，或修正既有簡報的換行雜亂、孤字、折行檢查回報、配色不一致、內容口語不聚焦與代碼名稱外露。
+  以 deckstyle 引擎（python-pptx）把宣告式 YAML 規格（deck.yml）建成高密度技術簡報（PPTX）：白底細線圓角、藍綠琥珀玫紅語義色票（品牌讀 Quarto 的 brand.yml）、真正的 PPTX 範本與具名版面、圖表、大數字與實際畫面截圖區塊、單行不折行與白話命名，附可執行的範本、規格驗證與零折行 lint。
+  用於製作、重排或美化技術提案、專題報告、工程架構與客戶說明投影片，把實際畫面截圖放進簡報，更換品牌色或作者；修正既有簡報的換行雜亂、孤字、折行檢查回報、配色不一致與內容口語不聚焦；把投影片與講稿裡客戶看不懂的路徑、設定鍵、程式識別字與倉庫名稱改成白話；或 deckstyle build 回報某頁某區塊（如 arch-graph、表格、截圖）規格錯誤、欄位寫錯時。
 compatibility: 需要 uv（python-pptx、pillow、lxml、pyyaml 由 uv 依 pyproject 安裝）；`--pdf` 與 `preview` 需 macOS 的 PowerPoint（預覽另需 poppler），其餘平台只出 .pptx。
 license: MIT
 ---

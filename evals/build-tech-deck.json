@@ -57,7 +57,12 @@
         "把投影片與講稿備註中的路徑、設定鍵、資料表欄位名、檔名與倉庫名稱改成白話的功能名稱",
         "保留學術與標準名詞、通用工具名；維護者看的 README 不必改",
         "以 scripts/lint.py（專案的倉庫與服務代號寫進 lint.deny 或用 --deny）確認沒有殘留並重建"
-      ]
+      ],
+      "setup": {
+        "files": {
+          "deck/deck.yml": "title: 平台導入說明\nsubtitle: 給客戶的導入提案\ncategory: 導入提案\nshort-title: 平台導入\nslides:\n- title: 登入後從 /portal 進入報表\n  blocks:\n  - block: note\n    lines: [使用者登入後進 /portal 查看每日報表]\n- title: 資料庫調校讓報表更快\n  blocks:\n  - block: note\n    lines: [shared_buffers 調到 4GB，acme-platform-api 負責寫入]\n  notes: 由 acme-platform-api 與 acme-etl 兩個倉庫負責。\n"
+        }
+      }
     },
     {
       "id": "change-brand-and-author",
@@ -76,7 +81,12 @@
         "依訊息指出的頁碼與區塊檢查 deck.yml 的欄位名稱（kebab-case）、必填欄位與 kind 名稱，不改引擎程式碼",
         "可用 deckstyle schema spec 產生 JSON Schema 讓編輯器即時驗證",
         "修正後重新建置，確認通過規格驗證與 lint"
-      ]
+      ],
+      "setup": {
+        "files": {
+          "deck/deck.yml": "title: 系統導入提案\nsubtitle: 架構與時程\ncategory: 技術提案\nshort-title: 系統導入\nslides:\n- title: 背景：現場資料分散在三套系統\n  blocks:\n  - block: note\n    lines: [現場、品質、維護各自記錄]\n- title: 需求：同一台設備要對得上\n  blocks:\n  - block: note\n    lines: [跨系統查詢要能串起同一台設備]\n- title: 系統架構\n  blocks:\n  - block: arch-graph\n    cols: 3\n    rows: 2\n    node:\n    - {id: a, title: 現場系統}\n    - {id: b, title: 整合服務}\n    edges:\n    - {from: a, to: b}\n"
+        }
+      }
     }
   ]
 }
