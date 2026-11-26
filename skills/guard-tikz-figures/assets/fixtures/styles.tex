@@ -1,0 +1,12 @@
+% 夾帶 fixture 共用的樣式：只用 TikZ 內建與常見函式庫，字為 ASCII，不需要 CJK 字型。
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds,shapes.geometric,calc}
+\tikzset{
+  box/.style={rectangle, rounded corners=3pt, draw, fill=blue!8, minimum height=8mm, minimum width=22mm, align=center},
+  decision/.style={diamond, aspect=2.4, draw, fill=gray!8, align=center, inner sep=2pt},
+  flow/.style={-{Stealth[length=2.5mm]}, thick},
+  lab/.style={font=\scriptsize, fill=white, inner sep=2pt},
+  annot/.style={rectangle, draw, dashed, fill=white, font=\footnotesize, align=center},
+  leader/.style={densely dotted, shorten >=2pt, shorten <=2pt},
+  region/.style={draw, dashed, rounded corners=4pt, fill=gray!6, inner sep=8pt},
+}

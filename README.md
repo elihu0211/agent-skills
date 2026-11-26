@@ -16,6 +16,7 @@
 | [`build-tech-deck`](skills/build-tech-deck) | 高密度技術簡報（PPTX）：YAML 規格、Quarto 品牌與作者分層、語義色票、圖表與截圖區塊、零折行與白話命名 |
 | [`draw-mermaid-diagrams`](skills/draw-mermaid-diagrams) | 支援深／淺色自動切換的 Mermaid 圖表（`look: neo`、透明 `subgraph` 外框與語意邊框、離線 lint） |
 | [`draw-layered-diagrams`](skills/draw-layered-diagrams) | 以 YAML 規格畫分層架構、分層對照與分層系統流程圖（淡色層帶、圓角方塊、層間說明框或節點間直角連線），直接輸出兩倍解析度 PNG，溢字或線壓到東西即停 |
+| [`guard-tikz-figures`](skills/guard-tikz-figures) | 逐張編譯 TikZ 圖、量出節點連線與標籤，有壓疊就擋下，附 Claude Code hook |
 
 ## 結構
 

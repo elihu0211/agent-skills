@@ -1,0 +1,49 @@
+{
+  "skill": "guard-tikz-figures",
+  "cases": [
+    {
+      "id": "flowchart-label-overlap",
+      "query": "docs/review.qmd 裡那張 TikZ 流程圖，有個「未通過」的標籤壓到菱形，另一條線好像穿過中間的方框。幫我修好，並確認整份文件的圖都沒有再壓疊。",
+      "expected_behavior": [
+        "用 check.py 檢查 docs/review.qmd，取得每張圖的問題、行號與標籤",
+        "改圖的版面（pos、線的走向、節點間距），不放寬門檻、不加 allow 註記",
+        "重跑 check.py 直到結束碼 0"
+      ],
+      "setup": {
+        "files": {
+          "_quarto.yml": "project:\n  type: default\nformat:\n  pdf:\n    include-in-header:\n      - text: |\n          \\usepackage{tikz}\n          \\usetikzlibrary{arrows.meta,positioning,shapes.geometric}\n",
+          "docs/review.qmd": "---\ntitle: 審查流程\n---\n\n```{=latex}\n\\begin{figure}[H]\n\\centering\n\\begin{tikzpicture}[node distance=6mm and 6mm]\n\\node[draw] (a) {收件};\n\\node[draw, right=of a] (b) {初審};\n\\node[draw, diamond, right=of b] (c) {結果};\n\\draw[->] (a) -- (c);\n\\draw[->] (c) -- node[fill=white, above] {未通過的案件退回} (b);\n\\end{tikzpicture}\n\\caption{審查流程}\n\\label{fig:review}\n\\end{figure}\n```\n"
+        }
+      }
+    },
+    {
+      "id": "wire-hook-and-prepush",
+      "query": "我們的 Quarto 文件庫有上百張 TikZ 圖，常常出現連線穿過節點、標籤壓到方框。幫我在這個 repo 接上自動檢查：Claude Code 改圖時當下擋、push 前也擋。",
+      "expected_behavior": [
+        "以 skills CLI 安裝技能，hook 指向 .agents/skills/guard-tikz-figures/scripts/hook.py",
+        "在 .claude/settings.json 加 PostToolUse（Edit|Write|MultiEdit）hook，timeout 足夠",
+        "pre-push 與建置檢查呼叫同一個 check.py 指令，並故意做一張壓疊的圖確認三處都擋得下"
+      ],
+      "setup": {
+        "files": {
+          "_quarto.yml": "project:\n  type: default\nformat: pdf\n",
+          "docs/a.qmd": "---\ntitle: A\n---\n\n```{=latex}\n\\begin{tikzpicture}\\node[draw] {A};\\end{tikzpicture}\n```\n"
+        }
+      }
+    },
+    {
+      "id": "fix-hook-feedback",
+      "query": "hook 回報 docs/arch.tex:12 fig:auth [label-on-arrow] 標籤「staff」蓋住連線的箭頭，還有 [text-overflow] 字超出菱形。照它的建議修。",
+      "expected_behavior": [
+        "讀 references/rules.md 對應規則的修法",
+        "把標籤移到線段中段或線的一側、必要時改成節點標題；菱形加大 aspect、inner sep 或換行",
+        "重跑 check.py 確認該檔結束碼 0"
+      ],
+      "setup": {
+        "files": {
+          "docs/arch.tex": "\\documentclass{article}\n\\usepackage{tikz}\n\\usetikzlibrary{arrows.meta,positioning,shapes.geometric}\n\\begin{document}\n\\begin{figure}\n\\centering\n% 角色分流\n\\begin{tikzpicture}[node distance=8mm]\n\\node[draw, diamond, aspect=1, inner sep=0pt] (check) {角色校驗與權限判斷};\n\\node[draw, below=of check] (staff) {一般使用者};\n\\draw[-{Stealth}] (check) -- node[fill=white, pos=0.92] {staff} (staff);\n\\end{tikzpicture}\n\\label{fig:auth}\n\\end{figure}\n\\end{document}\n"
+        }
+      }
+    }
+  ]
+}
