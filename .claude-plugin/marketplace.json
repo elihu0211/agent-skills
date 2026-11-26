@@ -96,6 +96,15 @@
       "skills": [
         "./skills/draw-layered-diagrams"
       ]
+    },
+    {
+      "name": "guard-tikz-figures",
+      "description": "Compile each TikZ figure in .qmd/.tex on its own and block overlapping nodes, edges through nodes, labels on nodes or arrowheads, text overflow and stacked edges, with a Claude Code hook",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./skills/guard-tikz-figures"
+      ]
     }
   ]
 }

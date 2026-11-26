@@ -1,0 +1,46 @@
+---
+title: "guard-tikz-figures 的 .qmd fixture"
+format: pdf
+---
+
+只有 `{=latex}` raw block 裡的圖會被抽出來；圖的位置回報成 `\begin{tikzpicture}` 那一行，
+標籤取同一個 figure 環境的 `\label`，沒有時取外層 Quarto 區塊的 `#fig-…`。
+
+```{=latex}
+\begin{figure}[H]
+\centering
+% expect: edge-through-node
+\begin{tikzpicture}[node distance=8mm]
+  \node[draw] (a) {A};
+  \node[draw, right=of a] (b) {B};
+  \node[draw, right=of b] (c) {C};
+  \draw[->] (a) -- (c);
+\end{tikzpicture}
+\caption{連線穿過中間的節點}
+\label{fig:through}
+\end{figure}
+```
+
+::: {#fig-detour}
+```{=latex}
+% expect: none
+\begin{tikzpicture}[node distance=8mm]
+  \node[draw] (a) {A};
+  \node[draw, right=of a] (b) {B};
+  \node[draw, right=of b] (c) {C};
+  \draw[->] (a.north) -- ++(0,4mm) -| (c.north);
+\end{tikzpicture}
+```
+
+改走上方繞過中間的節點
+:::
+
+註解掉的圖、程式碼區塊裡的字都不算：
+
+```{=latex}
+% \begin{tikzpicture} \node {舊圖}; \end{tikzpicture}
+```
+
+```python
+print(r"\begin{tikzpicture}")
+```
