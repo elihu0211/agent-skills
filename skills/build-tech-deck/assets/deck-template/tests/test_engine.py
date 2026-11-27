@@ -14,7 +14,7 @@ from conftest import TEMPLATE, one_slide
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 from pptx.enum.text import PP_ALIGN
-from pptx.util import Inches
+from pptx.util import Inches, Pt
 
 from deckstyle import design, engine
 from deckstyle.measure import text_em
@@ -450,6 +450,15 @@ def test_badges_draw_side_by_side_in_their_own_colors(build_spec: Build, theme: 
     assert dots[0].top == dots[1].top == dots[2].top
     fills = [d.fill.fore_color.rgb for d in dots]
     assert fills == [theme.tones["blue"].line, theme.tones["green"].line, theme.white]
+
+
+def test_badges_have_a_white_ring_to_stand_off_same_colored_cards(build_spec: Build, theme: Theme) -> None:
+    """深色徽章壓在深色卡片上也看得出圓形：每個徽章都有白色外圈。"""
+    node = {"id": "n", "col": 0, "row": 0, "title": "品質模組", "kind": "solid_dark", "badges": [["共", "dark"]]}
+    out = build_spec(one_slide([("arch_graph", {"nodes": [node], "cols": 2, "rows": 2})]))
+    (dot,) = _dots(out)
+    assert dot.line.color.rgb == theme.white
+    assert dot.line.width == Pt(theme.line_strong)
 
 
 @pytest.mark.parametrize(
