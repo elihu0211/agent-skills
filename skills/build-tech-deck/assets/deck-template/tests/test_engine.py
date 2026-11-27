@@ -558,6 +558,24 @@ def test_bent_edge_puts_one_arrowhead_at_each_end(build_spec: Build) -> None:
     assert sorted(_arrow_ends(build_spec(one_slide([("arch_graph", graph)])))) == [(False, True), (True, False)]
 
 
+@pytest.mark.parametrize("tall_first", [True, False])
+def test_edges_beside_a_row_spanning_node_stay_level_with_each_neighbor(build_spec: Build, tall_first: bool) -> None:
+    """跨列節點接左右鄰居：每條線畫在鄰居的中心高度、是一段水平線，不折過其他節點。"""
+    nodes = [{"id": "box", "col": 0, "row": 0, "row_span": 3, "title": "電控箱"}]
+    nodes += [{"id": f"n{r}", "col": 1, "row": r, "title": f"鄰居{r}"} for r in range(3)]
+    ends = [("box", f"n{r}") if tall_first else (f"n{r}", "box") for r in range(3)]
+    graph = {"nodes": nodes, "edges": [{"from": a, "to": b} for a, b in ends], "cols": 2, "rows": 3, "h": 4.35}
+    shapes = list(Presentation(str(build_spec(one_slide([("arch_graph", graph)])))).slides[1].shapes)
+    lines = sorted((sh for sh in shapes if sh.shape_type == MSO_SHAPE_TYPE.LINE), key=lambda sh: sh.begin_y)
+    neighbors = [
+        next(sh for sh in shapes if sh.has_text_frame and sh.text_frame.text.startswith(f"鄰居{r}")) for r in range(3)
+    ]
+    assert len(lines) == 3
+    for ln, node in zip(lines, neighbors, strict=True):
+        assert ln.begin_y == ln.end_y
+        assert abs(ln.begin_y - (node.top + node.height / 2)) <= Inches(0.005)
+
+
 @pytest.mark.parametrize("label", ["事件", "事件・稽核", "POST JSON", "查詢結果與稽核紀錄"])
 def test_column_gap_fits_the_label_of_a_horizontal_edge(build_spec: Build, theme: Theme, label: str) -> None:
     """橫向邊的標籤放在兩節點之間：欄距依標籤寬度推算，標籤不壓到方框；短標籤維持原本的欄距。"""

@@ -405,6 +405,28 @@ def _label_rect(t: Theme, label: str, box: Rect, *, centered: bool, middle: bool
     return (x + (w - width) / 2 if centered else x, y + (h - height) / 2 if middle else y, width, height)
 
 
+def _span_level(
+    a: dict[str, Any],
+    a_box: tuple[float, float, float, float],
+    b: dict[str, Any],
+    b_box: tuple[float, float, float, float],
+) -> float | None:
+    """跨列節點與左右鄰居的水平連線高度：取列數少的那一端的中心；不適用時回 `None`。
+
+    跨列節點的中心落在列與列之間，照中心高度判斷會把左右鄰居畫成折線、穿過其他節點。
+    """
+    a_rows, b_rows = a.get("row_span", 1), b.get("row_span", 1)
+    if a_rows == b_rows:
+        return None
+    ax, _, aw, _ = a_box
+    bx, _, bw, _ = b_box
+    if not (bx >= ax + aw or ax >= bx + bw):  # 欄位重疊的不是左右鄰居
+        return None
+    short, tall = (a_box, b_box) if a_rows < b_rows else (b_box, a_box)
+    level = short[1] + short[3] / 2
+    return level if tall[1] <= level <= tall[1] + tall[3] else None
+
+
 def _check_edge_clear(
     ed: dict[str, Any],
     nodes: dict[str, Rect],
@@ -585,6 +607,7 @@ def arch_graph(
                 pill(t, slide, nx + 0.06, ny - _PILL_H / 2, pw, _PILL_H, b_str, kind=pill_kind(b_kind), fs=9.0)
 
     # 3. 繪製有向邊與邊標籤
+    placed = {nd["id"]: nd for nd in nodes}
     titles = {nd["id"]: str(nd["title"]) for nd in nodes}
     for ed in edges or []:
         for end in ("from", "to"):
@@ -601,8 +624,9 @@ def arch_graph(
         label = ed.get("label")
         both = ed.get("arrow") == "both"  # 來回兩個方向畫成一條雙向箭頭
 
-        if abs((ay + ah / 2) - (by + bh / 2)) < 0.25:  # 水平連線
-            my = (ay + ah / 2 + by + bh / 2) / 2
+        level_y = _span_level(placed[ed["from"]], node_boxes[ed["from"]], placed[ed["to"]], node_boxes[ed["to"]])
+        if level_y is not None or abs((ay + ah / 2) - (by + bh / 2)) < 0.25:  # 水平連線
+            my = (ay + ah / 2 + by + bh / 2) / 2 if level_y is None else level_y
             x1, x2 = (ax + aw + 0.03, bx - 0.03) if bx > ax else (ax - 0.03, bx + bw + 0.03)
             seg(t, slide, x1, my, x2, my, color=ecolor, dash=edash, start_arrow=both)
             text_at = (min(x1, x2) - 0.22, my - (0.34 if blocked else 0.28), abs(x2 - x1) + 0.44, 0.22)
