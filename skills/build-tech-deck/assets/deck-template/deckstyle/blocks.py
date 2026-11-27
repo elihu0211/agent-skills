@@ -1025,10 +1025,22 @@ def _shot_label(it: dict[str, Any]) -> str:
     return f"**{it['title']}**　{it['body']}" if it.get("body") else f"**{it['title']}**"
 
 
+def _shot_trim(it: dict[str, Any]) -> tuple[float, float]:
+    """`trim: [上, 下]`：依原圖高度的比例裁掉上、下緣（如圖檔自帶的標題與頁尾），只影響投影片、不改圖檔。"""
+    trim = it.get("trim")
+    if trim is None:
+        return 0.0, 0.0
+    if len(trim) != 2 or any(not 0 <= float(v) < 1 for v in trim) or float(trim[0]) + float(trim[1]) >= 1:
+        raise SpecError(f"shots 的 trim 要寫成 [上, 下] 兩個 0 到 1 之間的比例、相加小於 1，這裡是 {trim}")
+    return float(trim[0]), float(trim[1])
+
+
 def _shot_aspect(path: Path, it: dict[str, Any]) -> tuple[float, float]:
-    """（原圖高／寬, 畫出的高／寬）；`crop` 只取上緣、使高／寬等於該值。"""
+    """（原圖高／寬, 畫出的高／寬）；先依 `trim` 裁上下緣，`crop` 再只取剩下畫面的上緣、使高／寬等於該值。"""
     full = _image_aspect(path)
-    return full, (min(full, float(it["crop"])) if it.get("crop") else full)
+    top, bottom = _shot_trim(it)
+    visible = full * (1.0 - top - bottom)
+    return full, (min(visible, float(it["crop"])) if it.get("crop") else visible)
 
 
 def _shot_picture(
@@ -1040,12 +1052,14 @@ def _shot_picture(
     aspect: float,
     full: float,
 ) -> None:
-    """放一張圖（外加一圈細框）並寫替代文字；畫出的高／寬小於原圖時裁掉下緣。"""
+    """放一張圖（外加一圈細框）並寫替代文字；依 `trim` 裁上緣，畫出的高／寬小於剩下的畫面時再裁下緣。"""
     x, y, w, h = box
     pic = slide.shapes.add_picture(str(path), Inches(x), Inches(y), Inches(w), Inches(h))
     alt_text(pic, it.get("alt") or "：".join(v for v in (it["title"], it.get("body")) if v))
-    if aspect < full:
-        pic.crop_bottom = 1.0 - aspect / full
+    top, _ = _shot_trim(it)
+    if top or aspect < full:
+        pic.crop_top = top
+        pic.crop_bottom = 1.0 - top - aspect / full
         pic.height = Inches(h)
     rect(t, slide, x, y, w, h, line_color=t.rule, weight=t.line_hair)
 
@@ -1065,8 +1079,9 @@ def shots(
 ) -> float:
     """實際畫面截圖列：每張圖外加一圈細框，圖下一行「**標題**　說明」；可在右側放語義卡片。
 
-    items：`{"image": 相對簡報目錄的路徑, "title": 標題, "body": 說明, "crop": 高／寬（選填）}`；多張圖等寬並排，
-    依各自長寬比縮放；`crop` 只取畫面上緣、使高／寬等於該值（扁長版面用，不另存裁好的圖）。
+    items：`{"image": 相對簡報目錄的路徑, "title": 標題, "body": 說明, "crop": 高／寬（選填）, "trim": [上, 下]（選填）}`；
+    多張圖等寬並排，依各自長寬比縮放；`crop` 只取畫面上緣、使高／寬等於該值（扁長版面用，不另存裁好的圖）；
+    `trim` 依原圖高度比例裁掉上下緣（圖檔自帶的標題、頁尾與投影片標題重複時用），裁掉後圖照樣撐滿可用空間。
     side：右側卡片（`kind`、`title`、`body`），與 arch_graph 的 side_thesis 同形。
     figure：單張大圖撐滿整個區塊高度，見 `_figure`。
     `assets` 是簡報目錄，圖片路徑相對於它（Deck 帶入，規格不寫）。

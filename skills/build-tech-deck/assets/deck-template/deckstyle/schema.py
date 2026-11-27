@@ -46,6 +46,12 @@ _TYPES: dict[str, dict[str, Any]] = {
     "num": _SCALAR,
     "badge": _SCALAR,
     "col_w": {"type": "array", "items": _NUM, "minItems": 1},
+    "trim": {
+        "type": "array",
+        "items": {"type": "number", "minimum": 0, "exclusiveMaximum": 1},
+        "minItems": 2,
+        "maxItems": 2,
+    },
     "highlight": {"type": "array", "items": _INT},
     "aligns": {"type": "array", "items": {"enum": list(ALIGNS)}},
     "values": {"type": "array", "items": _NUM},
