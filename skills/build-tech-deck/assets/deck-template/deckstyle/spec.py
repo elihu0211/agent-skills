@@ -147,7 +147,19 @@ BLOCK_SCHEMA: dict[str, dict[str, Any]] = {
         "lists": {
             "nodes": {
                 "req": ("id", "col", "row", "title"),
-                "opt": ("kind", "sub", "en", "col_span", "row_span", "inset", "badge", "tfs", "bfs", "bullet"),
+                "opt": (
+                    "kind",
+                    "sub",
+                    "en",
+                    "col_span",
+                    "row_span",
+                    "inset",
+                    "badge",
+                    "badges",
+                    "tfs",
+                    "bfs",
+                    "bullet",
+                ),
                 "kinds": ("kind",),
             },
             "edges": {
@@ -295,6 +307,40 @@ def _check_table(where: str, kw: Mapping[str, Any]) -> None:
             raise SpecError(f"{where}：aligns 只能是 {', '.join(ALIGNS)}：{a!r}")
 
 
+#: `badges` 每個圓形徽章最多放的字數：圓徑只容得下一、兩個字
+BADGE_DOT_CHARS = 2
+
+
+def badge_items(node: Mapping[str, Any]) -> list[tuple[str, str | None]]:
+    """節點 `badges` 的每個徽章 →（文字, kind）；只寫文字的 kind 為 None，沿用節點的顏色。"""
+    return [(str(b[0]), b[1]) if isinstance(b, list) else (str(b), None) for b in node.get("badges") or ()]
+
+
+def _check_badges(where: str, kw: Mapping[str, Any]) -> None:
+    for i, nd in enumerate(kw["nodes"]):
+        if "badges" not in nd:
+            continue
+        at = f"{where}的 nodes[{i + 1}]"
+        seq = nd["badges"]
+        if "badge" in nd:
+            raise SpecError(f"{at}：badge 與 badges 擇一，一個徽章寫 badge、多個寫 badges")
+        if not isinstance(seq, list) or not seq:
+            raise SpecError(f"{at}：badges 須為非空清單，每項是文字或 [文字, kind]：{seq!r}")
+        for j, b in enumerate(seq):
+            if isinstance(b, list) and (len(b) != 2 or b[1] not in KINDS):
+                raise SpecError(
+                    f"{at}：badges 第 {j + 1} 項的 [文字, kind] 不合法：{b!r}（kind 可用：{', '.join(KINDS)}）"
+                )
+            text = b[0] if isinstance(b, list) else b
+            if not isinstance(text, (str, int)) or isinstance(text, bool) or not str(text):
+                raise SpecError(f"{at}：badges 第 {j + 1} 項須為文字或 [文字, kind]：{b!r}")
+            if len(str(text)) > BADGE_DOT_CHARS:
+                raise SpecError(
+                    f"{at}：badges 第 {j + 1} 項「{text}」超過 {BADGE_DOT_CHARS} 個字，圓形徽章放不下；"
+                    "改用一兩個字的代號，在圖例或備註說明"
+                )
+
+
 def check_block(where: str, name: str, kw: Mapping[str, Any]) -> None:
     """檢查一個區塊（區塊名稱、必填與未知欄位、kind 名稱、表格形狀）。"""
     if name not in BLOCK_SCHEMA:
@@ -302,6 +348,8 @@ def check_block(where: str, name: str, kw: Mapping[str, Any]) -> None:
     _check(f"{where}的 {kebab(name)} 區塊", kw, BLOCK_SCHEMA[name])
     if name == "table":
         _check_table(f"{where}的 table 區塊", kw)
+    if name == "arch_graph":
+        _check_badges(f"{where}的 arch-graph 區塊", kw)
 
 
 def split_block(where: str, block: Any) -> tuple[str, dict[str, Any]]:

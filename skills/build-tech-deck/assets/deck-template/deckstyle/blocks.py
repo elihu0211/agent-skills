@@ -46,7 +46,7 @@ from .draw import (
     text_box,
 )
 from .measure import REFLOW, line_height, text_em, wrap_count
-from .spec import SpecError, as_lines, check_table
+from .spec import SpecError, as_lines, badge_items, check_table
 from .theme import Theme
 
 _ALIGN = {"left": PP_ALIGN.LEFT, "center": PP_ALIGN.CENTER, "right": PP_ALIGN.RIGHT}
@@ -54,6 +54,7 @@ _ALIGN = {"left": PP_ALIGN.LEFT, "center": PP_ALIGN.CENTER, "right": PP_ALIGN.RI
 _BADGE_GAP = 0.02  # 徽章與卡片文字之間至少留的空白（英吋）
 _PILL_H = 0.22  # 跨在卡片上緣的膠囊徽章高，一半壓進卡片
 _DOT_D = 0.25  # 圓形序號徽章直徑
+_BADGE_ROW_GAP = 0.04  # 同一張卡片上並排的圓形徽章之間的間距
 _SAME_COLUMN = 0.35  # 兩節點中心的水平差小於此值時，連線走直向
 _EDGE_INSET = 0.03  # 直向連線兩端離節點邊緣的距離
 _ARROW_ROOM = 0.1  # 「✕」徽章兩側各留給連線與箭頭的長度
@@ -519,6 +520,7 @@ def arch_graph(
         node_boxes[nd["id"]] = (nx, ny, nw, nh)
         b_str = str(nd["badge"]) if nd.get("badge") else ""
         b_kind = nd.get("kind", "dark")
+        dots = badge_items(nd)
         text = {
             "title": nd["title"],
             "body": nd.get("sub"),
@@ -528,7 +530,9 @@ def arch_graph(
             "en": nd.get("en"),
         }
         pad_top = None
-        if b_str:
+        if dots:
+            pad_top = _pad_top_below_badge(t, f"節點「{nd['title']}」", nw, nh, 0.02 + _DOT_D / 2, 0.10, 0.06, **text)
+        elif b_str:
             drop = (0.02 + _DOT_D / 2) if len(b_str) <= 2 else _PILL_H / 2
             pad_top = _pad_top_below_badge(t, f"節點「{nd['title']}」", nw, nh, drop, 0.10, 0.06, **text)
         card(
@@ -546,6 +550,20 @@ def arch_graph(
             align=_ALIGN[align],
             **text,
         )
+        # 多個徽章由左往右排在卡片左上角，各自取 kind 的線色；沒寫 kind 的沿用節點顏色
+        for i, (text_i, kind_i) in enumerate(dots):
+            k = kind_i or b_kind
+            badge(
+                t,
+                slide,
+                nx + 0.02 + i * (_DOT_D + _BADGE_ROW_GAP),
+                ny + 0.02,
+                text_i,
+                fill=badge_fill(t, k),
+                ink=t.ink if k == "solid_dark" else t.white,
+                d=_DOT_D,
+                fs=t.type.label,
+            )
         if b_str:
             if len(b_str) <= 2:
                 badge(

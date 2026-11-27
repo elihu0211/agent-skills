@@ -65,6 +65,17 @@ _CELL = {
 }
 _BLOCK_TYPES: dict[tuple[str, str], dict[str, Any]] = {
     ("table", "rows"): {"type": "array", "minItems": 1, "items": {"type": "array", "items": _CELL}},
+    ("arch_graph", "badges"): {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+            "oneOf": [
+                _STR,
+                _INT,
+                {"type": "array", "prefixItems": [_STR, {"enum": list(KINDS)}], "items": False, "minItems": 2},
+            ]
+        },
+    },
     ("arch_graph", "cols"): _INT,
     ("arch_graph", "rows"): _INT,
     ("columns", "items"): _STRS,  # columns 的 items 在欄位元素層：條列
