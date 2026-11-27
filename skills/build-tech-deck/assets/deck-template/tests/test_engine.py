@@ -426,6 +426,57 @@ def test_badge_pushes_tight_text_below_itself(build_spec: Build) -> None:
     assert tf.margin_top > tf.margin_bottom
 
 
+def _dots(out: Path) -> list[Any]:
+    """第 2 頁所有圓形徽章，由左往右。"""
+    slide = list(Presentation(str(out)).slides)[1]
+    ovals = [sh for sh in slide.shapes if sh.shape_type == MSO_SHAPE_TYPE.AUTO_SHAPE and "ellipse" in sh._element.xml]
+    return sorted(ovals, key=lambda sh: sh.left)
+
+
+def test_badges_draw_side_by_side_in_their_own_colors(build_spec: Build, theme: Theme) -> None:
+    """`badges` 每項一個圓形徽章：由左往右並排，[文字, kind] 取該 kind 的線色，只寫文字的沿用節點顏色。"""
+    node = {
+        "id": "n",
+        "col": 0,
+        "row": 0,
+        "title": "品質模組",
+        "kind": "solid_dark",
+        "badges": [["雲", "blue"], ["邊", "green"], "共"],
+    }
+    out = build_spec(one_slide([("arch_graph", {"nodes": [node], "cols": 2, "rows": 2})]))
+    dots = _dots(out)
+    assert [d.text_frame.text for d in dots] == ["雲", "邊", "共"]
+    assert dots[0].left + dots[0].width < dots[1].left
+    assert dots[0].top == dots[1].top == dots[2].top
+    fills = [d.fill.fore_color.rgb for d in dots]
+    assert fills == [theme.tones["blue"].line, theme.tones["green"].line, theme.white]
+
+
+@pytest.mark.parametrize(
+    ("extra", "match"),
+    [
+        ({"badges": ["雲"], "badge": "邊"}, "擇一"),
+        ({"badges": ["第二期"]}, "超過 2 個字"),
+        ({"badges": [["雲", "sky"]]}, r"\[文字, kind\] 不合法"),
+        ({"badges": []}, "非空清單"),
+    ],
+)
+def test_badges_reject_what_a_dot_cannot_show(build_spec: Build, extra: dict[str, Any], match: str) -> None:
+    """與 badge 並寫、超過兩個字、kind 拼錯或空清單，都停在建置時。"""
+    node = {"id": "n", "col": 0, "row": 0, "title": "品質模組", **extra}
+    with pytest.raises(SpecError, match=match):
+        build_spec(one_slide([("arch_graph", {"nodes": [node], "cols": 1, "rows": 1})]))
+
+
+def test_badges_overlapping_the_title_are_reported(build_spec: Build) -> None:
+    """多個徽章同樣占掉卡片上緣：四行文字放不下就報錯，不讓徽章蓋住標題。"""
+    node = _badged_node(en="Field Systems & Gateway", sub="具 REST 的系統直連\n其餘經 nDAS 6000")
+    del node["badge"]
+    node["badges"] = [["雲", "blue"], ["邊", "green"]]
+    with pytest.raises(SpecError, match=r"「現場系統與閘道」.*徽章"):
+        build_spec(one_slide([("arch_graph", _graph(node))]))
+
+
 def _blocked_pair(rows: int, upward: bool = False, horizontal: bool = False) -> dict[str, Any]:
     """上下（或左右）相鄰的兩個節點與一條阻斷邊；三列以上的列距最窄。"""
     second = {"col": 1, "row": 0} if horizontal else {"col": 0, "row": 1}
