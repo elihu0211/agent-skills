@@ -553,7 +553,7 @@ def arch_graph(
         # 多個徽章由左往右排在卡片左上角，各自取 kind 的線色；沒寫 kind 的沿用節點顏色
         for i, (text_i, kind_i) in enumerate(dots):
             k = kind_i or b_kind
-            badge(
+            dot = badge(
                 t,
                 slide,
                 nx + 0.02 + i * (_DOT_D + _BADGE_ROW_GAP),
@@ -564,6 +564,9 @@ def arch_graph(
                 d=_DOT_D,
                 fs=t.type.label,
             )
+            # 白色外圈把徽章和卡片隔開：同色的徽章壓在同色卡片或框線上也看得出圓形
+            dot.line.color.rgb = t.white
+            dot.line.width = Pt(t.line_strong)
         if b_str:
             if len(b_str) <= 2:
                 badge(
