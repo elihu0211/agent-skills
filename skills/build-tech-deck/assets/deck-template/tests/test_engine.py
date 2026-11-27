@@ -220,8 +220,9 @@ def test_shots_crop_and_side(build_spec: Build) -> None:
     build_spec(one_slide([("shots", shots)]))
 
 
-def _figure_slide(build_spec: Build, **shots: Any) -> Any:
-    spec = {"items": [{"image": "screens/sample.png", "title": "圖", "body": "說明"}], "figure": True, **shots}
+def _figure_slide(build_spec: Build, item: dict[str, Any] | None = None, **shots: Any) -> Any:
+    image = {"image": "screens/sample.png", "title": "圖", "body": "說明", **(item or {})}
+    spec = {"items": [image], "figure": True, **shots}
     slide = Presentation(str(build_spec(one_slide([("shots", spec)])))).slides[1]
     pic = next(s for s in slide.shapes if s.shape_type == MSO_SHAPE_TYPE.PICTURE)
     return slide, pic
@@ -229,6 +230,21 @@ def _figure_slide(build_spec: Build, **shots: Any) -> Any:
 
 def _near(a: float, b: float) -> bool:
     return abs(a - b) < Inches(0.01)
+
+
+def test_shots_trim_crops_top_and_bottom_and_keeps_the_aspect(build_spec: Build) -> None:
+    """trim：依原圖高度比例裁上下緣；畫出的框長寬比等於留下的畫面，圖不變形。"""
+    _, plain = _figure_slide(build_spec)
+    _, pic = _figure_slide(build_spec, {"trim": [0.1, 0.05]})
+    assert abs(pic.crop_top - 0.1) < 1e-6 and abs(pic.crop_bottom - 0.05) < 1e-6
+    shown = pic.height / pic.width
+    assert abs(shown - (plain.height / plain.width) * 0.85) < 0.01
+
+
+@pytest.mark.parametrize("trim", [[0.6, 0.5], [0.1], [-0.1, 0.0]])
+def test_shots_trim_rejects_bad_fractions(build_spec: Build, trim: list[float]) -> None:
+    with pytest.raises(SpecError, match=r"trim 要寫成"):
+        _figure_slide(build_spec, {"trim": trim})
 
 
 def test_shots_figure_fills_the_height_and_side_takes_the_rest(build_spec: Build, theme: Theme) -> None:
